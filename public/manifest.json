@@ -1,0 +1,17 @@
+{
+  "short_name": "MCM Gestão",
+  "name": "MCM Montagens - Gestão & Inventário",
+  "icons": [
+    {
+      "src": "/logo-mcm.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "display": "standalone",
+  "orientation": "any",
+  "description": "Sistema de Gestão de Solicitações de Compra e Inventário da MCM Montagens"
+}

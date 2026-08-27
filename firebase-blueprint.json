@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "sc": {
+      "title": "Solicitação de Compra",
+      "description": "Registro de solicitação de compra da empresa MCM com controle de múltiplos itens, prazos, entregas e auditoria",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID único da solicitação" },
+        "numero": { "type": "string", "description": "Número de controle da SC" },
+        "data": { "type": "string", "description": "Data de emissão (YYYY-MM-DD)" },
+        "solicitante": { "type": "string", "description": "Nome do colaborador ou setor solicitante" },
+        "tipo": { "type": "string", "description": "Item ou Serviço" },
+        "origem": { "type": "string", "description": "Origem da solicitação" },
+        "filial": { "type": "string", "description": "Filial ou empresa da MCM" },
+        "projeto": { "type": "string", "description": "Código ou nome do projeto/centro de custo" },
+        "status": { "type": "string", "description": "Em andamento ou Concluído" },
+        "itens": { "type": "array", "description": "Lista de itens detalhados com quantidade, unidade, destino e entrega parcial" },
+        "prioridade": { "type": "string", "description": "Baixa, Média, Alta, Urgente" },
+        "dataVencimento": { "type": "string", "description": "Prazo limite de entrega" },
+        "anexos": { "type": "array", "description": "URLs de anexos e notas" },
+        "historicoAuditoria": { "type": "array", "description": "Histórico cronológico de alterações" },
+        "ultimaAlteracao": { "type": "object", "description": "Detalhes da última alteração" }
+      },
+      "required": ["id", "numero", "data", "solicitante", "status"]
+    },
+    "equipment": {
+      "title": "Equipamento de TI",
+      "description": "Ativo fixo de tecnologia da informação e histórico de manutenção",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID único do equipamento" },
+        "codigoPatrimonio": { "type": "string", "description": "Código AF ou Patrimônio" },
+        "nome": { "type": "string", "description": "Nome ou tipo do equipamento" },
+        "categoria": { "type": "string", "description": "Notebook, Desktop, Servidor, Periférico, etc." },
+        "status": { "type": "string", "description": "Ativado, Desativado, Manutenção" },
+        "localizacao": { "type": "string", "description": "Setor, filial ou responsável" },
+        "responsavel": { "type": "string", "description": "Colaborador em posse do ativo" },
+        "historicoManutencao": { "type": "array", "description": "Registros de manutenção" },
+        "ultimaAlteracao": { "type": "object", "description": "Detalhes da última alteração" }
+      },
+      "required": ["id", "codigoPatrimonio", "nome", "status"]
+    },
+    "user": {
+      "title": "Perfil de Usuário",
+      "description": "Perfil e nível de permissão (Comprador, Almoxarifado, Gestor, Admin)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID do usuário" },
+        "nome": { "type": "string", "description": "Nome completo" },
+        "email": { "type": "string", "description": "E-mail do colaborador" },
+        "role": { "type": "string", "description": "comprador | almoxarifado | gestor | admin" },
+        "departamento": { "type": "string", "description": "Departamento de atuação" }
+      },
+      "required": ["id", "nome", "email", "role"]
+    },
+    "systemSetting": {
+      "title": "Configuração do Sistema",
+      "description": "Configurações globais e preferências",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "description": "Chave da configuração" },
+        "value": { "type": "string", "description": "Valor armazenado" },
+        "updatedAt": { "type": "string", "description": "Data de atualização" }
+      },
+      "required": ["key", "value"]
+    }
+  },
+  "firestore": {
+    "/scs/{scId}": {
+      "schema": "sc",
+      "description": "Coleção de solicitações de compra sincronizadas em tempo real"
+    },
+    "/equipments/{equipmentId}": {
+      "schema": "equipment",
+      "description": "Coleção do inventário de equipamentos de TI"
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Coleção de usuários e perfis da equipe"
+    },
+    "/system_settings/{settingId}": {
+      "schema": "systemSetting",
+      "description": "Configurações gerais do sistema"
+    }
+  }
+}

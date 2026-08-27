@@ -1,0 +1,6 @@
+{
+  "name": "MCM Montagens - Painel SC",
+  "description": "Painel de solicitações de compra (SC) e inventário de TI da MCM Montagens com banco de dados em nuvem Firebase Firestore, sincronização multiusuário em tempo real, controle de itens e entregas no almoxarifado, controle de acesso RBAC e alertas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
