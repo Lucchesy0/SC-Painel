@@ -347,7 +347,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                           : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through'
                       }`}
                     >
-                      🛒 Painel de SC
+                      Painel SC
                     </span>
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
@@ -356,12 +356,12 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                           : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through'
                       }`}
                     >
-                      📦 Inventários
+                      Inventário TI
                     </span>
                   </div>
 
                   <div className="mt-2 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-2">
-                    <span className="truncate">🏢 {user.departamento}</span>
+                    <span className="truncate">{user.departamento || 'Geral'}</span>
 
                     <div className="flex items-center gap-1 shrink-0">
                       {hasPassword ? (
@@ -548,7 +548,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                         className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500"
                       />
                       <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">🛒 Painel de SC</span>
+                        <span className="font-bold text-slate-900 dark:text-white block">Painel de SC</span>
                         <span className="text-[10px] text-slate-400">Solicitações & Compras</span>
                       </div>
                     </label>
@@ -561,7 +561,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                         className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                       />
                       <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">📦 Inventários</span>
+                        <span className="font-bold text-slate-900 dark:text-white block">Inventários</span>
                         <span className="text-[10px] text-slate-400">Ativos TI & Almoxarifado</span>
                       </div>
                     </label>
@@ -713,7 +713,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                         className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500"
                       />
                       <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">🛒 Painel de SC</span>
+                        <span className="font-bold text-slate-900 dark:text-white block">Painel de SC</span>
                         <span className="text-[10px] text-slate-400">Solicitações & Compras</span>
                       </div>
                     </label>
@@ -726,7 +726,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                         className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                       />
                       <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">📦 Inventários</span>
+                        <span className="font-bold text-slate-900 dark:text-white block">Inventários</span>
                         <span className="text-[10px] text-slate-400">Ativos TI & Almoxarifado</span>
                       </div>
                     </label>

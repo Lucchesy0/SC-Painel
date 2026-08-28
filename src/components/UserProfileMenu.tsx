@@ -1,38 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   User,
-  ShieldCheck,
   ChevronDown,
-  Check,
-  Truck,
-  ShoppingCart,
-  BarChart2,
-  Sparkles,
-  Cloud,
-  CloudCheck,
-  CloudOff,
-  RefreshCw,
-  Lock,
-  Unlock,
-  KeyRound,
-  UserPlus,
-  Users,
+  Settings as SettingsIcon,
   LogOut,
+  Shield,
+  Users,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserProfile, UserRole, CloudSyncStatus } from '../types';
-import {
-  DEFAULT_USERS,
-  getRoleLabel,
-  getRoleBadgeClass,
-  getRolePermissions,
-} from '../services/authService';
+import { UserProfile, CloudSyncStatus } from '../types';
+import { getRoleLabel } from '../services/authService';
+import { triggerHaptic } from '../utils/haptics';
 
 interface UserProfileMenuProps {
   currentUser: UserProfile;
-  users?: UserProfile[];
-  onSelectUser: (user: UserProfile) => void;
+  onOpenEditProfile?: () => void;
+  onOpenSettings?: () => void;
   onOpenAdminUsers?: () => void;
+  onOpenAdminOverview?: () => void;
   onLogout?: () => void;
   cloudStatus?: CloudSyncStatus;
   lastSyncTime?: string;
@@ -41,9 +28,10 @@ interface UserProfileMenuProps {
 
 export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   currentUser,
-  users = DEFAULT_USERS,
-  onSelectUser,
+  onOpenEditProfile,
+  onOpenSettings,
   onOpenAdminUsers,
+  onOpenAdminOverview,
   onLogout,
   cloudStatus = 'connected',
   lastSyncTime,
@@ -62,27 +50,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const badgeStyle = getRoleBadgeClass(currentUser.role);
-  const permissions = getRolePermissions(currentUser.role);
-
-  const getRoleIcon = (role: UserRole) => {
-    switch (role) {
-      case 'admin':
-        return ShieldCheck;
-      case 'usuario':
-        return Users;
-      case 'comprador':
-        return ShoppingCart;
-      case 'almoxarifado':
-        return Truck;
-      case 'gestor':
-        return BarChart2;
-      default:
-        return User;
-    }
-  };
-
-  const activeUsers = users && users.length > 0 ? users : DEFAULT_USERS;
+  const isAdmin = currentUser.role === 'admin';
 
   return (
     <div className="relative shrink-0" ref={menuRef}>
@@ -91,49 +59,38 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         type="button"
         id="btnUserProfileTrigger"
         onClick={() => setIsOpen(!isOpen)}
-        aria-label="Perfil de Usuário e Nível de Acesso"
-        title={`Usuário: ${currentUser.nome} (${getRoleLabel(currentUser.role)})`}
-        className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-xl bg-slate-100/90 dark:bg-[#1c2230]/90 border border-slate-200/90 dark:border-slate-700/80 hover:border-orange-500/50 hover:bg-slate-200/50 dark:hover:bg-[#252c3e] transition-all cursor-pointer shadow-2xs group active:scale-95"
+        aria-label="Menu do usuário"
+        className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer text-left group"
       >
-        {/* User Avatar Circle */}
         <div
-          className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg ${
-            currentUser.avatarColor || 'bg-orange-600'
-          } text-white flex items-center justify-center font-bold text-xs shadow-xs relative`}
+          className={`w-7 h-7 rounded-md ${
+            currentUser.avatarColor || 'bg-slate-700'
+          } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
         >
-          {currentUser.nome.charAt(0)}
-          {/* Cloud Live Dot */}
+          {currentUser.nome.charAt(0).toUpperCase()}
           <span
-            title={cloudStatus === 'connected' ? 'Nuvem Firebase Conectada' : 'Sincronizando'}
-            className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#1c2230] ${
+            className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white ${
               cloudStatus === 'connected'
                 ? 'bg-emerald-500'
                 : cloudStatus === 'syncing'
-                ? 'bg-amber-500 animate-ping'
-                : 'bg-red-500'
+                ? 'bg-amber-500 animate-pulse'
+                : 'bg-slate-400'
             }`}
           />
         </div>
 
-        {/* User Info & Role (Desktop) */}
-        <div className="hidden md:flex flex-col text-left leading-tight min-w-0 max-w-[120px]">
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+        <div className="hidden md:flex flex-col text-left leading-tight max-w-[130px]">
+          <span className="text-xs font-semibold text-slate-800 truncate">
             {currentUser.nome}
           </span>
-          <span
-            className={`text-[9px] font-extrabold uppercase tracking-wider ${
-              currentUser.role === 'admin'
-                ? 'text-indigo-600 dark:text-indigo-400'
-                : 'text-orange-600 dark:text-orange-400'
-            }`}
-          >
-            {currentUser.role === 'admin' ? 'ADMINISTRADOR' : getRoleLabel(currentUser.role)}
+          <span className="text-[10px] text-slate-500 truncate">
+            {isAdmin ? 'Administrador' : getRoleLabel(currentUser.role)}
           </span>
         </div>
 
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-            isOpen ? 'rotate-180 text-orange-500' : ''
+          className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-150 ${
+            isOpen ? 'rotate-180 text-slate-700' : ''
           }`}
         />
       </button>
@@ -142,228 +99,151 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.96 }}
+            initial={{ opacity: 0, y: 4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-80 sm:w-88 rounded-2xl bg-white dark:bg-[#181e2b] border border-slate-200/90 dark:border-slate-800 shadow-2xl z-50 overflow-hidden font-sans"
+            exit={{ opacity: 0, y: 4, scale: 0.98 }}
+            transition={{ duration: 0.12 }}
+            className="absolute right-0 mt-1.5 w-64 rounded-xl bg-white border border-slate-200 shadow-lg z-50 overflow-hidden font-sans"
           >
-            {/* Header: Active Profile */}
-            <div className="p-4 bg-linear-to-b from-slate-50 to-white dark:from-[#1c2230] dark:to-[#181e2b] border-b border-slate-200/80 dark:border-slate-800/80">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-11 h-11 rounded-2xl ${
-                      currentUser.avatarColor || 'bg-orange-600'
-                    } text-white flex items-center justify-center font-black text-base shadow-sm shrink-0`}
-                  >
-                    {currentUser.nome.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                      {currentUser.nome}
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                      {currentUser.email}
-                    </p>
-                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase rounded-lg border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}
-                      >
-                        {currentUser.role === 'admin' ? (
-                          <ShieldCheck className="w-3 h-3" />
-                        ) : (
-                          <Users className="w-3 h-3" />
-                        )}
-                        {getRoleLabel(currentUser.role)}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {currentUser.departamento}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cloud Sync Health Mini Banner */}
-              <div className="mt-3 p-2 rounded-xl bg-slate-100/80 dark:bg-[#131722]/80 border border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                  <Cloud
-                    className={`w-3.5 h-3.5 ${
-                      cloudStatus === 'connected' ? 'text-emerald-500' : 'text-amber-500'
-                    }`}
-                  />
-                  <span className="font-semibold">Nuvem Firestore:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                    {cloudStatus === 'connected' ? 'Conectado' : 'Sincronizando'}
-                  </span>
-                </div>
-                {lastSyncTime && (
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {lastSyncTime}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Role Capabilities Overview */}
-            <div className="px-4 py-2.5 bg-slate-50/50 dark:bg-[#151a26]/50 border-b border-slate-200/60 dark:border-slate-800/60 text-[11px] text-slate-600 dark:text-slate-300">
-              <span className="font-bold text-slate-800 dark:text-slate-200 block mb-1">
-                ⚡ Permissões do Perfil:
-              </span>
-              <div className="grid grid-cols-2 gap-1 text-[10px]">
+            {/* Header Info */}
+            <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
                 <div
-                  className={`flex items-center gap-1 ${
-                    permissions.canCreateSC
-                      ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                      : 'text-slate-400 line-through'
-                  }`}
+                  className={`w-9 h-9 rounded-lg ${
+                    currentUser.avatarColor || 'bg-slate-700'
+                  } text-white flex items-center justify-center font-bold text-sm shrink-0`}
                 >
-                  <span>{permissions.canCreateSC ? '✓' : '✕'}</span> Criar / Editar SCs
+                  {currentUser.nome.charAt(0).toUpperCase()}
                 </div>
-                <div
-                  className={`flex items-center gap-1 ${
-                    permissions.canReceiveItems
-                      ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                      : 'text-slate-400 line-through'
-                  }`}
-                >
-                  <span>{permissions.canReceiveItems ? '✓' : '✕'}</span> Recebimento Almox
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${
-                    permissions.canManageEquipments
-                      ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                      : 'text-slate-400 line-through'
-                  }`}
-                >
-                  <span>{permissions.canManageEquipments ? '✓' : '✕'}</span> Inventário TI
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${
-                    permissions.canAccessSettings
-                      ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                      : 'text-slate-400 line-through'
-                  }`}
-                >
-                  <span>{permissions.canAccessSettings ? '✓' : '✕'}</span> Painel Admin
-                </div>
-              </div>
-            </div>
-
-            {/* Team Members List (If more than 1 user) */}
-            {activeUsers.length > 1 && (
-              <div className="p-2 max-h-48 overflow-y-auto">
-                <div className="flex items-center justify-between px-2 py-1">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Alternar Usuário ({activeUsers.length})
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-slate-900 truncate">
+                    {currentUser.nome}
                   </p>
-                  {currentUser.role === 'admin' && onOpenAdminUsers && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsOpen(false);
-                        onOpenAdminUsers();
-                      }}
-                      className="text-[10px] font-bold text-orange-600 dark:text-orange-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Users className="w-3 h-3" />
-                      Gerenciar
-                    </button>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {currentUser.email || 'Sem e-mail cadastrado'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Badges & Sync Line */}
+              <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200/70 text-slate-700">
+                    {getRoleLabel(currentUser.role)}
+                  </span>
+                  {currentUser.departamento && (
+                    <span className="text-[10px] text-slate-400 truncate max-w-[90px]">
+                      {currentUser.departamento}
+                    </span>
                   )}
                 </div>
 
-                <div className="space-y-1">
-                  {activeUsers.map((user) => {
-                    const isSelected = currentUser.id === user.id;
-                    const UserIcon = getRoleIcon(user.role);
-                    const userBadge = getRoleBadgeClass(user.role);
-                    const hasPassword = Boolean(user.password && user.password.trim().length > 0);
-
-                    return (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() => {
-                          onSelectUser(user);
-                          setIsOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-orange-500/10 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 font-bold border border-orange-500/30'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className={`w-7 h-7 rounded-lg ${
-                              user.avatarColor || 'bg-slate-600'
-                            } text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}
-                          >
-                            <UserIcon className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold truncate">{user.nome}</span>
-                              <span
-                                className={`px-1.5 py-0.2 text-[9px] font-bold rounded-sm border ${userBadge.bg} ${userBadge.text} ${userBadge.border}`}
-                              >
-                                {user.role === 'admin' ? 'ADMIN' : user.role}
-                              </span>
-                              {hasPassword && (
-                                <span title="Protegido por senha" className="text-slate-400">
-                                  <Lock className="w-2.5 h-2.5" />
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-slate-400 block truncate">
-                              {user.departamento}
-                            </span>
-                          </div>
-                        </div>
-
-                        {isSelected && (
-                          <div className="w-4 h-4 rounded-full bg-orange-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                            <Check className="w-3 h-3" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>{cloudStatus === 'connected' ? 'Online' : 'Sincronizando'}</span>
+                  {onRefreshCloud && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerHaptic('light');
+                        onRefreshCloud();
+                      }}
+                      title={lastSyncTime ? `Última sincronização: ${lastSyncTime}` : 'Sincronizar'}
+                      className="p-0.5 hover:text-slate-700 cursor-pointer transition-colors"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Quick Admin User Management Shortcut (Luchesy Admin Only) */}
-            {currentUser.role === 'admin' && onOpenAdminUsers && (
-              <div className="p-2 bg-slate-50 dark:bg-[#131722] border-t border-slate-200 dark:border-slate-800">
+            {/* Menu Actions */}
+            <div className="p-1 space-y-0.5">
+              {onOpenEditProfile && (
                 <button
                   type="button"
+                  id="btnMenuEditProfile"
                   onClick={() => {
+                    triggerHaptic('light');
                     setIsOpen(false);
-                    onOpenAdminUsers();
+                    onOpenEditProfile();
                   }}
-                  className="w-full py-2 px-3 rounded-xl bg-orange-600/10 hover:bg-orange-600/20 text-orange-600 dark:text-orange-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-orange-500/20"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
                 >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Cadastrar & Gerenciar Usuários</span>
+                  <User className="w-4 h-4 text-slate-500" />
+                  <span>Meu Perfil</span>
                 </button>
-              </div>
-            )}
+              )}
 
-            {/* Logout / Exit button */}
-            {onLogout && (
-              <div className="p-2 bg-slate-50/80 dark:bg-[#11151f] border-t border-slate-200 dark:border-slate-800">
+              {onOpenSettings && (
                 <button
                   type="button"
+                  id="btnMenuSettings"
                   onClick={() => {
+                    triggerHaptic('light');
+                    setIsOpen(false);
+                    onOpenSettings();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
+                >
+                  <SettingsIcon className="w-4 h-4 text-slate-500" />
+                  <span>Configurações</span>
+                </button>
+              )}
+
+              {isAdmin && (
+                <>
+                  {onOpenAdminOverview && (
+                    <button
+                      type="button"
+                      id="btnMenuAdminOverview"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setIsOpen(false);
+                        onOpenAdminOverview();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
+                    >
+                      <Shield className="w-4 h-4 text-slate-500" />
+                      <span>Painel Administrativo</span>
+                    </button>
+                  )}
+
+                  {onOpenAdminUsers && (
+                    <button
+                      type="button"
+                      id="btnMenuAdminUsers"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setIsOpen(false);
+                        onOpenAdminUsers();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
+                    >
+                      <Users className="w-4 h-4 text-slate-500" />
+                      <span>Usuários e Permissões</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Logout */}
+            {onLogout && (
+              <div className="p-1 border-t border-slate-100">
+                <button
+                  type="button"
+                  id="btnMenuLogout"
+                  onClick={() => {
+                    triggerHaptic('medium');
                     setIsOpen(false);
                     onLogout();
                   }}
-                  className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-rose-500/20"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer text-left"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Encerrar Sessão / Trocar Usuário</span>
+                  <LogOut className="w-4 h-4 text-rose-500" />
+                  <span>Sair da conta</span>
                 </button>
               </div>
             )}

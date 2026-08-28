@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Filter,
+  Plus,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SC, ThemeMode, FilterOptions, ToastMessage, Equipment, ActiveNavTab, AuditLogEntry, UserProfile, CloudSyncStatus } from './types';
@@ -45,6 +46,7 @@ import { AppDrawerMenu } from './components/AppDrawerMenu';
 import { SettingsModal } from './components/SettingsModal';
 import { PasswordAuthModal } from './components/PasswordAuthModal';
 import { LoginScreen } from './components/LoginScreen';
+import { EditProfileModal } from './components/EditProfileModal';
 
 // Função utilitária para normalizar centros de custo em todo o site
 const normalizeSCList = (list: SC[]): { list: SC[]; changed: number } => {
@@ -73,8 +75,10 @@ const normalizeSCList = (list: SC[]): { list: SC[]; changed: number } => {
 
 export default function App() {
   // Navigation & Theme
+  // Sempre que abrir no mobile (largura < 768px), o padrão será o tema Claro ('light')
   const [activeNavTab, setActiveNavTab] = useState<ActiveNavTab>('solicitacoes');
-  const [theme, setTheme] = useState<ThemeMode>('auto');
+  // Theme is locked strictly to light mode
+  const [theme] = useState<ThemeMode>('light');
 
   // User Profile & Roles (Comprador, Almoxarifado, Gestor, Admin, Usuario)
   const [authenticatedUser, setAuthenticatedUser] = useState<UserProfile | null>(() => authService.getAuthenticatedUser());
@@ -116,6 +120,7 @@ export default function App() {
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [editingSC, setEditingSC] = useState<SC | null>(null);
   const [selectedSC, setSelectedSC] = useState<SC | null>(null);
@@ -132,38 +137,13 @@ export default function App() {
     }, 4000);
   };
 
-  // Apply theme class
+  // Apply light theme only
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const applyTheme = () => {
-      const root = document.documentElement;
-      const isDark =
-        theme === 'dark' || (theme === 'auto' && mediaQuery.matches);
-
-      if (isDark) {
-        root.classList.add('dark');
-        document.body.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-        document.body.classList.remove('dark');
-      }
-    };
-
-    applyTheme();
-    dbService.saveTheme(theme).catch((err) => {
-      console.error('Erro ao salvar tema no IndexedDB:', err);
-    });
-
-    const handleSystemThemeChange = () => {
-      if (theme === 'auto') {
-        applyTheme();
-      }
-    };
-
-    mediaQuery.addEventListener?.('change', handleSystemThemeChange);
-    return () => mediaQuery.removeEventListener?.('change', handleSystemThemeChange);
-  }, [theme]);
+    const root = document.documentElement;
+    root.classList.remove('dark');
+    document.body.classList.remove('dark');
+    dbService.saveTheme('light').catch(() => {});
+  }, []);
 
   // Global Keyboard Shortcuts (Ctrl+K, Ctrl+N, Ctrl+F, Esc, Ctrl+Shift+A)
   useEffect(() => {
@@ -221,6 +201,7 @@ export default function App() {
         if (isDrawerOpen) setIsDrawerOpen(false);
         else if (isGlobalSearchOpen) setIsGlobalSearchOpen(false);
         else if (isNotificationsOpen) setIsNotificationsOpen(false);
+        else if (isEditProfileOpen) setIsEditProfileOpen(false);
         else if (isSettingsOpen) setIsSettingsOpen(false);
         else if (isModalOpen) setIsModalOpen(false);
         else if (isEqModalOpen) setIsEqModalOpen(false);
@@ -233,13 +214,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDrawerOpen, isGlobalSearchOpen, isNotificationsOpen, isSettingsOpen, isModalOpen, isEqModalOpen, selectedSC, selectedEq, isAdminOpen, deleteConfirmId, activeNavTab]);
-
-  const handleToggleTheme = () => {
-    const modes: ThemeMode[] = ['auto', 'light', 'dark'];
-    const next = modes[(modes.indexOf(theme) + 1) % modes.length];
-    setTheme(next);
-  };
+  }, [isDrawerOpen, isGlobalSearchOpen, isNotificationsOpen, isEditProfileOpen, isSettingsOpen, isModalOpen, isEqModalOpen, selectedSC, selectedEq, isAdminOpen, deleteConfirmId, activeNavTab]);
 
   // Background sync helper function
   const performBackgroundSync = async (notifyUser = false) => {
@@ -280,9 +255,6 @@ export default function App() {
       try {
         setLoading(true);
         testFirestoreConnection().catch(() => {});
-
-        const savedTheme = await dbService.getTheme();
-        if (savedTheme) setTheme(savedTheme);
 
         const savedModule = await dbService.getActiveModule();
         if (savedModule === 'inventario') {
@@ -336,6 +308,20 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    const handleOnline = () => {
+      setCloudStatus('connected');
+      performBackgroundSync(false);
+      showToast('Conexão restabelecida! Dados sincronizados com a nuvem.', 'success');
+    };
+
+    const handleOffline = () => {
+      setCloudStatus('offline');
+      showToast('Você está no modo offline. Os dados continuam salvos no aparelho.', 'info');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     return () => {
       unsubStatus();
       unsubSCs();
@@ -343,6 +329,8 @@ export default function App() {
       unsubUsers();
       unsubBroadcast();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -458,7 +446,7 @@ export default function App() {
       }
 
       if (isCompleting) {
-        showToast(`✨ SC ${sc.numero} concluída com sucesso!`, 'success');
+        showToast(`SC ${sc.numero} concluída com sucesso!`, 'success');
       } else {
         showToast(`SC ${sc.numero} reaberta para atendimento.`, 'info');
       }
@@ -701,7 +689,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#161a24] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 overflow-x-hidden w-full max-w-full">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans transition-colors duration-200 overflow-x-hidden w-full max-w-full">
       {/* Unified Top Navigation Bar */}
       <Header
         activeNavTab={activeNavTab}
@@ -716,6 +704,11 @@ export default function App() {
         cloudStatus={cloudStatus}
         lastSyncTime={lastSyncTime}
         onSelectUser={handleRequestSelectUser}
+        onOpenEditProfile={() => setIsEditProfileOpen(true)}
+        onOpenAdminOverview={() => {
+          setAdminInitialTab('overview');
+          setIsAdminOpen(true);
+        }}
         onOpenAdminUsers={() => {
           setAdminInitialTab('users');
           setIsAdminOpen(true);
@@ -723,7 +716,6 @@ export default function App() {
         onLogout={handleLogout}
         onRefreshCloud={handleRefreshLive}
         onNavTabChange={handleNavTabChange}
-        onToggleTheme={handleToggleTheme}
         onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -1107,9 +1099,23 @@ export default function App() {
           scs={scs}
           equipments={equipments}
           theme={theme}
-          onSetTheme={(t) => setTheme(t)}
           onImportData={handleImportData}
           onClearAll={handleClearAll}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Edit Profile Modal */}
+      {isEditProfileOpen && (
+        <EditProfileModal
+          isOpen={isEditProfileOpen}
+          user={currentUser}
+          onClose={() => setIsEditProfileOpen(false)}
+          onSave={(updated) => {
+            setCurrentUser(updated);
+            setAuthenticatedUser(updated);
+            setTeamUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+          }}
           onToast={showToast}
         />
       )}
@@ -1150,14 +1156,46 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
+      {/* Mobile Floating Action Button (FAB) - Sempre visível e acessível no polegar */}
+      {permissions.canCreateSC && (
+        <motion.button
+          type="button"
+          id="mobileFabAddSC"
+          onClick={
+            activeNavTab === 'inventario'
+              ? () => {
+                  setEditingEq(null);
+                  setIsEqModalOpen(true);
+                }
+              : handleOpenAdd
+          }
+          whileTap={{ scale: 0.92 }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className={`md:hidden fixed bottom-20 right-4 z-40 flex items-center justify-center gap-1.5 px-4 py-3 rounded-full text-white shadow-xl shadow-orange-500/30 border border-white/20 font-black text-xs cursor-pointer select-none active:brightness-95 ${
+            activeNavTab === 'inventario'
+              ? 'bg-linear-to-r from-blue-600 to-indigo-600 shadow-blue-500/30'
+              : 'bg-linear-to-r from-orange-600 to-amber-600'
+          }`}
+          aria-label={activeNavTab === 'inventario' ? 'Cadastrar Novo Ativo' : 'Adicionar Nova Solicitação'}
+        >
+          <Plus className="w-5 h-5 stroke-[2.5]" />
+          <span className="font-extrabold tracking-wide">
+            {activeNavTab === 'inventario' ? 'Novo Ativo' : 'Nova SC'}
+          </span>
+        </motion.button>
+      )}
+
       {/* Mobile Sticky Bottom Navigation Bar */}
       <MobileBottomNav
         activeNavTab={activeNavTab}
-        onNavTabChange={handleNavTabChange}
-        scCount={scs.length}
+       onNavTabChange={handleNavTabChange}
+       scCount={scs.length}
         delayedCount={delayedCount}
         equipmentCount={equipments.length}
         onOpenAdmin={() => setIsAdminOpen(true)}
+      isAdmin={currentUser.role === 'admin'}
       />
 
       {/* App Hamburger Drawer Menu */}
@@ -1172,8 +1210,6 @@ export default function App() {
         urgentNotificationsCount={urgentNotificationsCount}
         theme={theme}
         currentUser={currentUser}
-        onToggleTheme={handleToggleTheme}
-        onSetTheme={(t) => setTheme(t)}
         lastSyncTime={lastSyncTime}
         isRefreshing={isRefreshing}
         onRefreshLive={handleRefreshLive}
@@ -1185,6 +1221,7 @@ export default function App() {
         onOpenRMImport={() => setIsRMImportOpen(true)}
         onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenEditProfile={() => setIsEditProfileOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
         onOpenAdminUsers={() => {

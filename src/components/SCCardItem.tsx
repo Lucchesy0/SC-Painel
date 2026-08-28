@@ -198,35 +198,38 @@ export const SCCardItem: React.FC<SCCardItemProps> = memo(
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
           <span className="text-slate-400 font-mono text-[11px]">{dias} dias decorridos</span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => onSelectSC(sc)}
-              className="p-1.5 text-slate-500 hover:text-orange-600 rounded-md hover:bg-orange-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="min-w-[38px] min-h-[38px] flex items-center justify-center text-slate-500 hover:text-orange-600 rounded-xl hover:bg-orange-50 dark:hover:bg-slate-800 transition-colors cursor-pointer active:scale-90"
               title="Ver detalhes"
+              aria-label={`Ver detalhes da SC ${sc.numero}`}
             >
-              <Eye className="w-4 h-4" />
+              <Eye className="w-4.5 h-4.5" />
             </button>
             {canEdit && (
               <button
                 type="button"
                 onClick={() => onEditSC(sc)}
-                className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer active:scale-90"
                 title="Editar SC"
+                aria-label={`Editar SC ${sc.numero}`}
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-4.5 h-4.5" />
               </button>
             )}
             {canDelete && (
               <button
                 type="button"
                 onClick={() => onDeleteSC(sc.id)}
-                className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-slate-800 transition-colors cursor-pointer active:scale-90"
                 title="Excluir SC"
+                aria-label={`Excluir SC ${sc.numero}`}
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4.5 h-4.5" />
               </button>
             )}
           </div>

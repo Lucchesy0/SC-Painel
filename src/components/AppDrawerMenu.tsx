@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
-  Menu,
   ShoppingCart,
   LayoutDashboard,
   BarChart3,
@@ -13,24 +12,18 @@ import {
   Keyboard,
   Bell,
   RotateCw,
-  Sun,
-  Moon,
-  Monitor,
   Shield,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  Wrench,
   Download,
-  ExternalLink,
-  ChevronRight,
-  Sparkles,
   Settings as SettingsIcon,
+  Users,
+  LogOut,
+  User,
+  AlertCircle,
 } from 'lucide-react';
-import { ActiveNavTab, ThemeMode, SC, Equipment, UserProfile } from '../types';
+import { ActiveNavTab, ThemeMode, UserProfile } from '../types';
 import { MCMLogo } from './MCMLogo';
 import { triggerHaptic } from '../utils/haptics';
-import { Users, LogOut } from 'lucide-react';
+import { getRoleLabel } from '../services/authService';
 
 interface AppDrawerMenuProps {
   isOpen: boolean;
@@ -41,10 +34,8 @@ interface AppDrawerMenuProps {
   delayedCount: number;
   equipmentCount: number;
   urgentNotificationsCount: number;
-  theme: ThemeMode;
+  theme?: ThemeMode;
   currentUser?: UserProfile;
-  onToggleTheme: () => void;
-  onSetTheme?: (t: ThemeMode) => void;
   lastSyncTime?: string;
   isRefreshing?: boolean;
   onRefreshLive?: () => void;
@@ -53,6 +44,7 @@ interface AppDrawerMenuProps {
   onOpenRMImport?: () => void;
   onOpenGlobalSearch?: () => void;
   onOpenNotifications?: () => void;
+  onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
   onOpenAdmin: () => void;
   onOpenAdminUsers?: () => void;
@@ -72,10 +64,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
   delayedCount,
   equipmentCount,
   urgentNotificationsCount,
-  theme,
   currentUser,
-  onToggleTheme,
-  onSetTheme,
   lastSyncTime,
   isRefreshing = false,
   onRefreshLive,
@@ -84,16 +73,15 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
   onOpenRMImport,
   onOpenGlobalSearch,
   onOpenNotifications,
+  onOpenEditProfile,
   onOpenSettings,
   onOpenAdmin,
   onOpenAdminUsers,
   onLogout,
   onOpenShortcuts,
   onFilterDelayed,
-  onFilterMaintenance,
   onExportAllCSV,
 }) => {
-  // Close drawer on ESC key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -104,7 +92,6 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Lock body scroll when drawer is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -125,181 +112,177 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
   const navItems = [
     {
       id: 'solicitacoes' as ActiveNavTab,
-      label: 'Solicitações de Compras (SC)',
-      sub: 'Acompanhamento, filtros e prazos',
-      icon: <ShoppingCart className="w-5 h-5 text-orange-500" />,
-      badge: (
-        <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/20">
-          {scCount}
-        </span>
-      ),
-      color: 'hover:border-orange-500/40 bg-orange-500/5',
-      activeColor: 'bg-orange-500/10 border-orange-500 text-orange-600 dark:text-orange-400 font-bold',
+      label: 'Solicitações (SCs)',
+      module: 'sc',
+      icon: ShoppingCart,
+      badge: scCount > 0 ? `${scCount}` : null,
+      badgeType: 'neutral',
     },
     {
       id: 'indicadores' as ActiveNavTab,
       label: 'Indicadores & KPIs',
-      sub: 'Resumo executivo de desempenho',
-      icon: <LayoutDashboard className="w-5 h-5 text-emerald-500" />,
-      badge:
-        delayedCount > 0 ? (
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-            {delayedCount} atrasada{delayedCount > 1 ? 's' : ''}
-          </span>
-        ) : (
-          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-            Em dia
-          </span>
-        ),
-      color: 'hover:border-emerald-500/40 bg-emerald-500/5',
-      activeColor: 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold',
+      module: 'sc',
+      icon: LayoutDashboard,
+      badge: delayedCount > 0 ? `${delayedCount} atrasada${delayedCount > 1 ? 's' : ''}` : 'Em dia',
+      badgeType: delayedCount > 0 ? 'warning' : 'success',
     },
     {
       id: 'graficos' as ActiveNavTab,
-      label: 'Gráficos & Dashboards',
-      sub: 'Distribuição por status e solicitantes',
-      icon: <BarChart3 className="w-5 h-5 text-indigo-500" />,
+      label: 'Gráficos & Análises',
+      module: 'sc',
+      icon: BarChart3,
       badge: null,
-      color: 'hover:border-indigo-500/40 bg-indigo-500/5',
-      activeColor: 'bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold',
+      badgeType: 'neutral',
     },
     {
       id: 'inventario' as ActiveNavTab,
-      label: 'Inventário de TI & Ativos',
-      sub: 'Patrimônio, categorias e locais',
-      icon: <Boxes className="w-5 h-5 text-blue-500" />,
-      badge: (
-        <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-          {equipmentCount}
-        </span>
-      ),
-      color: 'hover:border-blue-500/40 bg-blue-500/5',
-      activeColor: 'bg-blue-500/10 border-blue-500 text-blue-600 dark:text-blue-400 font-bold',
+      label: 'Inventário de TI',
+      module: 'inventario',
+      icon: Boxes,
+      badge: equipmentCount > 0 ? `${equipmentCount}` : null,
+      badgeType: 'neutral',
     },
-  ];
+  ].filter((item) => {
+    if (currentUser?.role === 'admin') return true;
+    if (!currentUser) return true;
+    if (item.module === 'sc' && currentUser.canAccessSC === false) return false;
+    if (item.module === 'inventario' && currentUser.canAccessInventario === false) return false;
+    return true;
+  });
+
+  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex">
-          {/* Backdrop Blur */}
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.15 }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs cursor-pointer"
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs cursor-pointer"
           />
 
-          {/* Drawer Container (Slides from Left) */}
+          {/* Drawer Panel */}
           <motion.div
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="relative w-full max-w-[340px] sm:max-w-[380px] bg-white dark:bg-[#181d28] border-r border-slate-200 dark:border-slate-700/80 shadow-2xl flex flex-col h-full z-10 select-none overflow-hidden"
+            transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+            className="relative w-full max-w-[320px] bg-white border-r border-slate-200 shadow-xl flex flex-col h-full z-10 select-none overflow-hidden"
           >
-            {/* Drawer Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700/80 bg-slate-50/80 dark:bg-[#202534] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <MCMLogo className="h-6 sm:h-7" variant="full" />
-              </div>
+            {/* Top Bar */}
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
+              <MCMLogo className="h-6" variant="full" />
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
-                title="Fechar Menu"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Fechar menu"
+                aria-label="Fechar menu"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Scrollable Content Body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar touch-scroll">
-              {/* Sincronização Status Pill */}
-              <div className="p-3 rounded-xl bg-slate-100/90 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block leading-tight">
-                      Sistema Online
-                    </span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                      Multi-dispositivos conectado
-                    </span>
+            {/* Content List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-4 text-slate-700 custom-scrollbar">
+              {/* User Bar */}
+              {currentUser && (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={`w-8 h-8 rounded-lg ${
+                        currentUser.avatarColor || 'bg-slate-700'
+                      } text-white flex items-center justify-center font-bold text-xs shrink-0`}
+                    >
+                      {currentUser.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 truncate">
+                      <span className="text-xs font-bold text-slate-800 block truncate leading-snug">
+                        {currentUser.nome}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-medium block leading-none">
+                        {getRoleLabel(currentUser.role)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {onRefreshLive && (
-                  <button
-                    onClick={() => {
-                      triggerHaptic('light');
-                      onRefreshLive();
-                    }}
-                    disabled={isRefreshing}
-                    className="p-2 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
-                    title="Atualizar Agora"
-                  >
-                    <RotateCw className={`w-3.5 h-3.5 text-emerald-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    <span>Sync</span>
-                  </button>
-                )}
-              </div>
 
-              {/* 1. Módulos e Navegação Principal */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Navegação Principal
-                  </span>
+                  {onRefreshLive && (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('light');
+                        onRefreshLive();
+                      }}
+                      disabled={isRefreshing}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                      title={lastSyncTime ? `Última sincronização: ${lastSyncTime}` : 'Sincronizar dados'}
+                    >
+                      <RotateCw
+                        className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-orange-600' : ''}`}
+                      />
+                    </button>
+                  )}
                 </div>
-                <div className="space-y-1.5">
+              )}
+
+              {/* Navigation Menu */}
+              <div>
+                <span className="px-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Navegação
+                </span>
+                <nav className="space-y-0.5">
                   {navItems.map((item) => {
                     const isActive = activeNavTab === item.id;
+                    const Icon = item.icon;
                     return (
                       <button
                         key={item.id}
                         onClick={() => handleSelectTab(item.id)}
-                        className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        className={`w-full px-2.5 py-2 rounded-lg text-left transition-colors cursor-pointer flex items-center justify-between text-xs ${
                           isActive
-                            ? item.activeColor
-                            : `border-slate-200/80 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 ${item.color}`
+                            ? 'bg-orange-50 text-orange-700 font-bold'
+                            : 'text-slate-700 hover:bg-slate-100 font-medium'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 shadow-2xs shrink-0">
-                            {item.icon}
-                          </div>
-                          <div className="min-w-0 truncate">
-                            <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block truncate">
-                              {item.label}
-                            </span>
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
-                              {item.sub}
-                            </span>
-                          </div>
+                        <div className="flex items-center gap-2.5">
+                          <Icon
+                            className={`w-4 h-4 ${
+                              isActive ? 'text-orange-600' : 'text-slate-500'
+                            }`}
+                          />
+                          <span>{item.label}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {item.badge}
-                          <ChevronRight className="w-4 h-4 text-slate-400 opacity-60" />
-                        </div>
+
+                        {item.badge && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                              item.badgeType === 'warning'
+                                ? 'bg-rose-100 text-rose-700'
+                                : item.badgeType === 'success'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : isActive
+                                ? 'bg-orange-100 text-orange-800'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
-                </div>
+                </nav>
               </div>
 
-              {/* 2. Ações Rápidas do Sistema */}
+              {/* Quick Actions */}
               <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Ações Rápidas
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Nova SC */}
+                <span className="px-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Ações Rápidas
+                </span>
+                <div className="space-y-0.5">
                   {onOpenAddSC && (
                     <button
                       onClick={() => {
@@ -307,19 +290,13 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenAddSC();
                         onClose();
                       }}
-                      className="p-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 dark:text-orange-300 flex flex-col items-start gap-1 transition-all cursor-pointer text-left"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-semibold text-orange-700 hover:bg-orange-50 transition-colors cursor-pointer flex items-center gap-2.5"
                     >
-                      <div className="flex items-center gap-1.5 font-bold text-xs">
-                        <Plus className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
-                        <span>Nova SC</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Criar solicitação
-                      </span>
+                      <Plus className="w-4 h-4 text-orange-600 stroke-[2.5]" />
+                      <span>Nova Solicitação (SC)</span>
                     </button>
                   )}
 
-                  {/* Novo Ativo */}
                   {onOpenAddEquipment && (
                     <button
                       onClick={() => {
@@ -327,19 +304,13 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenAddEquipment();
                         onClose();
                       }}
-                      className="p-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 flex flex-col items-start gap-1 transition-all cursor-pointer text-left"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer flex items-center gap-2.5"
                     >
-                      <div className="flex items-center gap-1.5 font-bold text-xs">
-                        <Plus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Novo Ativo</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Cadastrar equipamento
-                      </span>
+                      <Plus className="w-4 h-4 text-blue-600 stroke-[2.5]" />
+                      <span>Novo Ativo de TI</span>
                     </button>
                   )}
 
-                  {/* Importar RM */}
                   {onOpenRMImport && (
                     <button
                       onClick={() => {
@@ -347,19 +318,13 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenRMImport();
                         onClose();
                       }}
-                      className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-emerald-500/50 text-slate-700 dark:text-slate-200 flex flex-col items-start gap-1 transition-all cursor-pointer text-left"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
                     >
-                      <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                        <span>Importar RM</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Importar CSV TOTVS
-                      </span>
+                      <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+                      <span>Importar Planilha RM</span>
                     </button>
                   )}
 
-                  {/* Busca Global */}
                   {onOpenGlobalSearch && (
                     <button
                       onClick={() => {
@@ -367,28 +332,26 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenGlobalSearch();
                         onClose();
                       }}
-                      className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 hover:border-blue-500/50 text-slate-700 dark:text-slate-200 flex flex-col items-start gap-1 transition-all cursor-pointer text-left"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 dark:text-slate-200">
-                        <Search className="w-3.5 h-3.5 text-blue-500" />
-                        <span>Busca Rápida</span>
+                      <div className="flex items-center gap-2.5">
+                        <Search className="w-4 h-4 text-slate-500" />
+                        <span>Buscar no Sistema</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Ctrl + K
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                        Ctrl+K
                       </span>
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* 3. Atalhos de Filtros Diretos */}
+              {/* Tools & Views */}
               <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Filtros de 1 Clique
-                  </span>
-                </div>
-                <div className="space-y-1.5">
+                <span className="px-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Ferramentas & Conta
+                </span>
+                <div className="space-y-0.5">
                   {onFilterDelayed && delayedCount > 0 && (
                     <button
                       onClick={() => {
@@ -396,13 +359,12 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onFilterDelayed();
                         onClose();
                       }}
-                      className="w-full p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-700 dark:text-rose-300 flex items-center justify-between text-xs font-bold transition-colors cursor-pointer"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-500" />
-                        <span>Ver {delayedCount} SCs Atrasadas</span>
+                      <div className="flex items-center gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-rose-600" />
+                        <span>Ver {delayedCount} SCs em Atraso</span>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   )}
 
@@ -413,27 +375,13 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onExportAllCSV();
                         onClose();
                       }}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
                     >
-                      <div className="flex items-center gap-2">
-                        <Download className="w-4 h-4 text-emerald-500" />
-                        <span>Exportar Relatório Geral (CSV)</span>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      <Download className="w-4 h-4 text-slate-500" />
+                      <span>Exportar Dados (CSV)</span>
                     </button>
                   )}
-                </div>
-              </div>
 
-              {/* 4. Notificações e Ferramentas */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Ferramentas & Central
-                  </span>
-                </div>
-                <div className="space-y-1.5">
-                  {/* Central de Notificações */}
                   {onOpenNotifications && (
                     <button
                       onClick={() => {
@@ -441,23 +389,53 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenNotifications();
                         onClose();
                       }}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
                     >
                       <div className="flex items-center gap-2.5">
-                        <Bell className="w-4 h-4 text-orange-500" />
-                        <span>Central de Notificações</span>
+                        <Bell className="w-4 h-4 text-slate-500" />
+                        <span>Notificações</span>
                       </div>
-                      {urgentNotificationsCount > 0 ? (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500 text-white">
+                      {urgentNotificationsCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500 text-white">
                           {urgentNotificationsCount}
                         </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">0 alertas</span>
                       )}
                     </button>
                   )}
 
-                  {/* Atalhos de Teclado */}
+                  {onOpenEditProfile && (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('light');
+                        onOpenEditProfile();
+                        onClose();
+                      }}
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
+                    >
+                      <User className="w-4 h-4 text-slate-500" />
+                      <span>Editar Perfil</span>
+                    </button>
+                  )}
+
+                  {onOpenSettings && (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('light');
+                        onOpenSettings();
+                        onClose();
+                      }}
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <SettingsIcon className="w-4 h-4 text-slate-500" />
+                        <span>Configurações</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                        Ctrl+,
+                      </span>
+                    </button>
+                  )}
+
                   {onOpenShortcuts && (
                     <button
                       onClick={() => {
@@ -465,20 +443,19 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenShortcuts();
                         onClose();
                       }}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
                     >
                       <div className="flex items-center gap-2.5">
-                        <Keyboard className="w-4 h-4 text-indigo-500" />
+                        <Keyboard className="w-4 h-4 text-slate-500" />
                         <span>Atalhos de Teclado</span>
                       </div>
-                      <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400">
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                         ?
                       </span>
                     </button>
                   )}
 
-                  {/* Admin-only: Gestão de Usuários e Configurações */}
-                  {currentUser?.role === 'admin' && (
+                  {isAdmin && (
                     <>
                       {onOpenAdminUsers && (
                         <button
@@ -487,54 +464,27 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                             onOpenAdminUsers();
                             onClose();
                           }}
-                          className="w-full p-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 dark:text-orange-300 flex items-center justify-between text-xs font-bold transition-colors cursor-pointer"
+                          className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
                         >
-                          <div className="flex items-center gap-2.5">
-                            <Users className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                            <span>Gestão de Usuários & Acessos</span>
-                          </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-orange-500" />
+                          <Users className="w-4 h-4 text-slate-500" />
+                          <span>Usuários & Permissões</span>
                         </button>
                       )}
 
-                      {onOpenSettings && (
-                        <button
-                          onClick={() => {
-                            triggerHaptic('light');
-                            onOpenSettings();
-                            onClose();
-                          }}
-                          className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <SettingsIcon className="w-4 h-4 text-orange-500" />
-                            <span>Configurações do Sistema</span>
-                          </div>
-                          <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400">
-                            Ctrl ,
-                          </span>
-                        </button>
-                      )}
-
-                      {/* Painel Administrativo */}
                       <button
                         onClick={() => {
                           triggerHaptic('light');
                           onOpenAdmin();
                           onClose();
                         }}
-                        className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/50 hover:bg-orange-500/10 hover:border-orange-500/40 text-slate-800 dark:text-slate-100 flex items-center justify-between text-xs font-bold transition-colors cursor-pointer"
+                        className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <Shield className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                          <span>Painel de Administração (Luchesy)</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                        <Shield className="w-4 h-4 text-slate-500" />
+                        <span>Painel Administrativo</span>
                       </button>
                     </>
                   )}
 
-                  {/* Sair / Logout */}
                   {onLogout && (
                     <button
                       onClick={() => {
@@ -542,83 +492,20 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onLogout();
                         onClose();
                       }}
-                      className="w-full p-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-between text-xs font-bold transition-colors cursor-pointer"
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer flex items-center gap-2.5 mt-2"
                     >
-                      <div className="flex items-center gap-2.5">
-                        <LogOut className="w-4 h-4 text-rose-500" />
-                        <span>Sair / Trocar Usuário</span>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-rose-400" />
+                      <LogOut className="w-4 h-4 text-rose-500" />
+                      <span>Sair</span>
                     </button>
                   )}
                 </div>
               </div>
-
-              {/* 5. Seletor de Tema Visual */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Aparência & Tema
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
-                  <button
-                    onClick={() => {
-                      triggerHaptic('light');
-                      if (onSetTheme) onSetTheme('light');
-                      else onToggleTheme();
-                    }}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      theme === 'light'
-                        ? 'bg-white dark:bg-slate-800 text-orange-600 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Sun className="w-3.5 h-3.5" />
-                    <span>Claro</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      triggerHaptic('light');
-                      if (onSetTheme) onSetTheme('dark');
-                      else onToggleTheme();
-                    }}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      theme === 'dark'
-                        ? 'bg-white dark:bg-slate-800 text-orange-400 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Moon className="w-3.5 h-3.5" />
-                    <span>Escuro</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      triggerHaptic('light');
-                      if (onSetTheme) onSetTheme('auto');
-                      else onToggleTheme();
-                    }}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      theme === 'auto'
-                        ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                    }`}
-                  >
-                    <Monitor className="w-3.5 h-3.5" />
-                    <span>Auto</span>
-                  </button>
-                </div>
-              </div>
             </div>
 
-            {/* Drawer Footer */}
-            <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-[#202534] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-semibold text-[11px]">
-                MCM Gestão de SC & TI
-              </span>
-              <span className="font-mono text-[10px] bg-slate-200/70 dark:bg-slate-700/70 px-1.5 py-0.5 rounded">
-                v2.5
-              </span>
+            {/* Bottom Version */}
+            <div className="px-4 py-3 border-t border-slate-200 text-[11px] text-slate-400 flex items-center justify-between bg-slate-50/50">
+              <span>MCM Montagens</span>
+              <span className="font-mono">v2.5</span>
             </div>
           </motion.div>
         </div>

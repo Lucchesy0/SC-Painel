@@ -81,7 +81,13 @@ export const SCTable: React.FC<SCTableProps> = ({
   const [gridConfig, setGridConfig] = useState<GridConfig>(() => {
     try {
       const saved = localStorage.getItem('mcm_sc_grid_config');
-      return saved ? JSON.parse(saved) : DEFAULT_GRID_CONFIG;
+      if (saved) return JSON.parse(saved);
+      // Auto-detect mobile screen for optimal initial view
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      return {
+        ...DEFAULT_GRID_CONFIG,
+        viewMode: isMobile ? 'cards' : 'table',
+      };
     } catch {
       return DEFAULT_GRID_CONFIG;
     }
@@ -261,15 +267,28 @@ export const SCTable: React.FC<SCTableProps> = ({
             </div>
           </div>
 
-          {/* Desktop Only Quick Actions */}
-          <div className="hidden md:flex items-center gap-1.5 shrink-0">
+          {/* Quick Actions (Nova SC, Importar RM, Exportar) */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onOpenAddSC && (
+              <button
+                type="button"
+                onClick={onOpenAddSC}
+                id="btnTableAddSC"
+                title="Criar Nova Solicitação de Compra"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl bg-linear-to-r from-orange-600 to-amber-600 text-white shadow-xs hover:from-orange-700 hover:to-amber-700 active:scale-95 transition-all cursor-pointer shrink-0 min-h-[30px]"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nova SC</span>
+              </button>
+            )}
+
             {onOpenImportRM && (
               <button
                 type="button"
                 onClick={onOpenImportRM}
                 id="btnTableImportarRM"
                 title="Importar dados do RM Totvs / Excel"
-                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-600 dark:hover:text-orange-400 active:scale-95 transition-all cursor-pointer shadow-2xs min-h-[30px]"
+                className="hidden md:inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-600 dark:hover:text-orange-400 active:scale-95 transition-all cursor-pointer shadow-2xs min-h-[30px]"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 <span>Importar RM</span>
@@ -282,7 +301,7 @@ export const SCTable: React.FC<SCTableProps> = ({
                 onClick={onExportCSV}
                 id="btnTableExportarCSV"
                 title="Exportar planilha completa em CSV"
-                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#282f40] active:scale-95 transition-all cursor-pointer shadow-2xs min-h-[30px]"
+                className="hidden md:inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#282f40] active:scale-95 transition-all cursor-pointer shadow-2xs min-h-[30px]"
               >
                 <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                 <span>Exportar</span>
@@ -301,7 +320,7 @@ export const SCTable: React.FC<SCTableProps> = ({
               value={filters.search}
               onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
               placeholder="Buscar por número, solicitante, item..."
-              className="w-full h-8.5 sm:h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-[#2c3343] text-slate-800 dark:text-slate-100 text-xs py-1 pl-9 pr-8 focus:outline-hidden focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 dark:focus:border-orange-400 placeholder-slate-400 min-h-[34px] shadow-2xs transition-all"
+              className="w-full h-8.5 sm:h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-[#2c3343] text-slate-800 dark:text-slate-100 text-sm sm:text-xs py-1 pl-9 pr-8 focus:outline-hidden focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 dark:focus:border-orange-400 placeholder-slate-400 min-h-[36px] sm:min-h-[34px] shadow-2xs transition-all"
             />
             {filters.search && (
               <button

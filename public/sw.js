@@ -1,12 +1,11 @@
 // Service Worker para PWA MCM Gestão - Suporte Offline Completo
-const CACHE_NAME = 'mcm-gestao-v2';
+const CACHE_NAME = 'mcm-gestao-v3';
 
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/logo-mcm.svg',
-  '/logo-mcm-white.svg',
+  '/logo-mcm.png',
 ];
 
 // Instalação do Service Worker e pré-cache dos assets fundamentais

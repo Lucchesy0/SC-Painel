@@ -262,12 +262,12 @@ export const SCDetailDrawer: React.FC<SCDetailDrawerProps> = ({
                           <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
                             {item.descricao}
                           </h4>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex-wrap">
-                            {item.fornecedor && <span>🏢 {item.fornecedor}</span>}
-                            <span>📍 {item.destino}</span>
+                          <div className="flex items-center gap-2.5 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex-wrap">
+                            {item.fornecedor && <span>{item.fornecedor}</span>}
+                            {item.destino && <span>Destino: {item.destino}</span>}
                             {item.valorUnitario && (
                               <span className="font-mono text-slate-700 dark:text-slate-300 font-semibold">
-                                💵 R$ {item.valorUnitario.toFixed(2)} / un
+                                R$ {item.valorUnitario.toFixed(2)} / un
                               </span>
                             )}
                           </div>

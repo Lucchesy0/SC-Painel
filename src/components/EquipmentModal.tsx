@@ -444,7 +444,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                     </option>
                   ))}
                   <option value="__NEW__" className="text-blue-600 font-bold">
-                    ➕ + Criar nova categoria...
+                    + Criar nova categoria...
                   </option>
                 </select>
                 {categoria && (
@@ -542,7 +542,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                     </option>
                   ))}
                   <option value="__NEW__" className="text-red-600 font-bold">
-                    ➕ + Criar nova localização...
+                    + Criar nova localização...
                   </option>
                 </select>
                 {localizacao && (
@@ -569,9 +569,9 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
               onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm p-3 font-semibold focus:ring-2 focus:ring-blue-500 min-h-[44px]"
             >
-              <option value="Ativado">🟢 Ativado</option>
-              <option value="Manutenção">🟡 Manutenção</option>
-              <option value="Desativado">🔴 Desativado</option>
+              <option value="Ativado">Ativado</option>
+              <option value="Manutenção">Manutenção</option>
+              <option value="Desativado">Desativado</option>
             </select>
           </div>
 

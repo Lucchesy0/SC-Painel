@@ -40,55 +40,55 @@ export const KPICards: React.FC<KPICardsProps> = ({ scs }) => {
   return (
     <div className="flex flex-col gap-4 w-full max-w-full min-w-0">
       {/* 4 KPI Grid Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         {/* Card 1: Total SC */}
-        <article className="animate-fade-in-card bg-white dark:bg-[#2a3040] rounded-xl border border-slate-200 dark:border-slate-500/50 p-4 flex flex-col gap-1 relative overflow-hidden shadow-xs hover:border-slate-300 dark:hover:border-orange-500/60 dark:hover:shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-all">
+        <article className="animate-fade-in-card bg-white dark:bg-[#2a3040] rounded-2xl border border-slate-200 dark:border-slate-500/50 p-3 sm:p-4 flex flex-col gap-0.5 sm:gap-1 relative overflow-hidden shadow-2xs hover:border-slate-300 dark:hover:border-orange-500/60 dark:hover:shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-all">
           <div className="absolute -right-3 -top-3 text-orange-500/10 dark:text-orange-400/10 pointer-events-none">
-            <ListFilter className="w-24 h-24" />
+            <ListFilter className="w-16 sm:w-24 h-16 sm:h-24" />
           </div>
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-300 relative z-10">
+          <span className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-300 relative z-10 truncate">
             Total SC
           </span>
-          <strong id="kpiTotalSC" className="text-3xl font-bold text-slate-900 dark:text-slate-100 relative z-10">
+          <strong id="kpiTotalSC" className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 relative z-10">
             {totalSC}
           </strong>
         </article>
 
         {/* Card 2: Em andamento */}
-        <article className="animate-fade-in-card [animation-delay:60ms] bg-white dark:bg-[#2a3040] rounded-xl border border-slate-200 dark:border-slate-500/50 p-4 flex flex-col gap-1 relative overflow-hidden shadow-xs hover:border-slate-300 dark:hover:border-amber-500/60 dark:hover:shadow-[0_0_15px_rgba(245,158,11,0.15)] transition-all">
+        <article className="animate-fade-in-card [animation-delay:60ms] bg-white dark:bg-[#2a3040] rounded-2xl border border-slate-200 dark:border-slate-500/50 p-3 sm:p-4 flex flex-col gap-0.5 sm:gap-1 relative overflow-hidden shadow-2xs hover:border-slate-300 dark:hover:border-amber-500/60 dark:hover:shadow-[0_0_15px_rgba(245,158,11,0.15)] transition-all">
           <div className="absolute -right-3 -top-3 text-amber-500/10 dark:text-amber-400/10 pointer-events-none">
-            <Clock className="w-24 h-24" />
+            <Clock className="w-16 sm:w-24 h-16 sm:h-24" />
           </div>
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-300 relative z-10">
+          <span className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-300 relative z-10 truncate">
             Em andamento
           </span>
-          <strong id="kpiEmAndamento" className="text-3xl font-bold text-amber-600 dark:text-amber-400 relative z-10">
+          <strong id="kpiEmAndamento" className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 relative z-10">
             {emAndamento}
           </strong>
         </article>
 
         {/* Card 3: Concluídas */}
-        <article className="animate-fade-in-card [animation-delay:120ms] bg-white dark:bg-[#2a3040] rounded-xl border border-slate-200 dark:border-slate-500/50 p-4 flex flex-col gap-1 relative overflow-hidden shadow-xs hover:border-slate-300 dark:hover:border-emerald-500/60 dark:hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all">
+        <article className="animate-fade-in-card [animation-delay:120ms] bg-white dark:bg-[#2a3040] rounded-2xl border border-slate-200 dark:border-slate-500/50 p-3 sm:p-4 flex flex-col gap-0.5 sm:gap-1 relative overflow-hidden shadow-2xs hover:border-slate-300 dark:hover:border-emerald-500/60 dark:hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all">
           <div className="absolute -right-3 -top-3 text-emerald-500/10 dark:text-emerald-400/10 pointer-events-none">
-            <CheckCircle2 className="w-24 h-24" />
+            <CheckCircle2 className="w-16 sm:w-24 h-16 sm:h-24" />
           </div>
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-300 relative z-10">
+          <span className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-300 relative z-10 truncate">
             Concluídas
           </span>
-          <strong id="kpiConcluidas" className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 relative z-10">
+          <strong id="kpiConcluidas" className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 relative z-10">
             {concluidas}
           </strong>
         </article>
 
         {/* Card 4: Dias médios em andamento */}
-        <article className="animate-fade-in-card [animation-delay:180ms] bg-white dark:bg-[#2a3040] rounded-xl border border-slate-200 dark:border-slate-500/50 p-4 flex flex-col gap-1 relative overflow-hidden shadow-xs hover:border-slate-300 dark:hover:border-slate-400/60 dark:hover:shadow-[0_0_15px_rgba(148,163,184,0.12)] transition-all">
+        <article className="animate-fade-in-card [animation-delay:180ms] bg-white dark:bg-[#2a3040] rounded-2xl border border-slate-200 dark:border-slate-500/50 p-3 sm:p-4 flex flex-col gap-0.5 sm:gap-1 relative overflow-hidden shadow-2xs hover:border-slate-300 dark:hover:border-slate-400/60 dark:hover:shadow-[0_0_15px_rgba(148,163,184,0.12)] transition-all">
           <div className="absolute -right-3 -top-3 text-slate-500/10 dark:text-slate-400/10 pointer-events-none">
-            <History className="w-24 h-24" />
+            <History className="w-16 sm:w-24 h-16 sm:h-24" />
           </div>
-          <span className="text-sm font-medium text-slate-500 dark:text-slate-400 relative z-10">
-            Dias médios em andamento
+          <span className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 relative z-10 truncate">
+            Dias médios
           </span>
-          <strong id="kpiDiasMedios" className="text-3xl font-bold text-slate-900 dark:text-slate-200 relative z-10">
+          <strong id="kpiDiasMedios" className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-200 relative z-10">
             {avgDaysPending}
           </strong>
         </article>
