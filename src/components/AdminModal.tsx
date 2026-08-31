@@ -9,28 +9,30 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   HardDrive,
-  Activity,
-  CheckCircle2,
-  Clock,
-  Server,
-  Layers,
   Settings,
-  RefreshCw,
-  Cpu,
-  Laptop,
-  Check,
-  Zap,
   Users,
+  Check,
+  CheckCircle2,
+  LayoutDashboard,
+  ShoppingCart,
+  Boxes,
+  Lock,
+  Unlock,
+  ArrowRight,
+  Activity,
+  Clock,
   KeyRound,
+  FileText,
+  Layers,
 } from 'lucide-react';
 import { SC, Equipment, UserProfile } from '../types';
-import { exportToCSV, exportEquipmentsToCSV, calcDays } from '../utils/storage';
+import { exportToCSV, exportEquipmentsToCSV } from '../utils/storage';
 import { downloadIDBBackupFile, FullBackupPayload } from '../services/backupService';
 import { dbService } from '../services/dbService';
 import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
-import { UserManagementTab } from './UserManagementTab';
+import { getRoleLabel } from '../services/authService';
 
-export type AdminTab = 'overview' | 'users' | 'backup' | 'config' | 'maintenance';
+export type AdminTab = 'overview' | 'backup' | 'config' | 'maintenance';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -41,6 +43,7 @@ interface AdminModalProps {
   currentUser?: UserProfile;
   onRefreshUsers?: () => void;
   initialTab?: AdminTab;
+  onOpenUsersModal?: () => void;
   onImportData: (scs: SC[], equipments?: Equipment[]) => Promise<void>;
   onClearAll: () => Promise<void>;
   onToast: (text: string, type: 'success' | 'error' | 'info') => void;
@@ -61,6 +64,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   currentUser = { id: 'usr-admin', nome: 'Admin', email: 'admin@mcm.com.br', role: 'admin', departamento: 'TI' },
   onRefreshUsers = () => {},
   initialTab = 'overview',
+  onOpenUsersModal,
   onImportData,
   onClearAll,
   onToast,
@@ -69,21 +73,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    if (isOpen && initialTab) {
+    if (isOpen) {
       setActiveTab(initialTab);
     }
   }, [isOpen, initialTab]);
+
   const [storageInfo, setStorageInfo] = useState<StorageEstimateData | null>(null);
-  const [serverPing, setServerPing] = useState<{ status: 'online' | 'offline' | 'checking'; latencyMs: number | null }>({
-    status: 'checking',
-    latencyMs: null,
-  });
 
   // Danger Zone confirmation
   const [dangerConfirmText, setDangerConfirmText] = useState('');
   const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
 
-  // Settings State (persisted)
+  // Settings State (persisted in localStorage)
   const [slaDays, setSlaDays] = useState<number>(() => {
     return Number(localStorage.getItem('mcm_setting_sla_days')) || 15;
   });
@@ -106,11 +107,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Diagnostics & Telemetry loaders
   useEffect(() => {
     if (!isOpen) return;
 
-    // 1. Check storage estimate
     if (navigator.storage && navigator.storage.estimate) {
       navigator.storage.estimate().then((estimate) => {
         const usageMB = (estimate.usage || 0) / (1024 * 1024);
@@ -123,68 +122,57 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         });
       });
     }
-
-    // 2. Ping server
-    checkServerLatency();
   }, [isOpen]);
-
-  const checkServerLatency = async () => {
-    setServerPing({ status: 'checking', latencyMs: null });
-    const startTime = performance.now();
-    try {
-      const res = await fetch('/api/sync-status', { cache: 'no-store' });
-      const endTime = performance.now();
-      if (res.ok) {
-        setServerPing({
-          status: 'online',
-          latencyMs: Math.round(endTime - startTime),
-        });
-      } else {
-        setServerPing({ status: 'offline', latencyMs: null });
-      }
-    } catch {
-      setServerPing({ status: 'offline', latencyMs: null });
-    }
-  };
 
   if (!isOpen) return null;
 
-  // Calculos analíticos de métricas
+  // Calculos de estatísticas para a Visão Geral
   const totalSCs = scs.length;
-  const totalConcluidas = scs.filter((s) => s.status === 'Concluído').length;
-  const totalAndamento = scs.filter((s) => s.status === 'Em andamento').length;
-  const totalItens = scs.reduce((acc, sc) => acc + (sc.itens?.length || 0), 0);
-  const atrasadas = scs.filter((s) => s.status === 'Em andamento' && calcDays(s.data, s.status) > slaDays).length;
+  const concluidasSCs = scs.filter((s) => s.status === 'Concluído').length;
+  const emAndamentoSCs = totalSCs - concluidasSCs;
+  const atrasadasSCs = scs.filter((s) => {
+    if (s.status === 'Concluído') return false;
+    if (!s.data) return false;
+    const parts = s.data.split('/');
+    if (parts.length === 3) {
+      const dt = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+      const diffDays = Math.floor((Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays > slaDays;
+    }
+    return false;
+  }).length;
 
-  const totalEquipamentos = equipments.length;
-  const eqAtivados = equipments.filter((e) => e.status === 'Ativado').length;
-  const eqManutencao = equipments.filter((e) => e.status === 'Manutenção').length;
-  const valorTotalInventario = equipments.reduce((acc, eq) => acc + (eq.valorEstimado || 0), 0);
+  const totalEquipments = equipments.length;
+  const emUsoEquipments = equipments.filter((e) => e.status === 'Em Uso').length;
+  const disponiveisEquipments = equipments.filter((e) => e.status === 'Disponível').length;
 
-  // Handlers de Configuração
+  const totalUsers = users.length;
+  const adminUsersCount = users.filter((u) => u.role === 'admin').length;
+  const usersWithPassword = users.filter((u) => Boolean(u.password && u.password.trim().length > 0)).length;
+  const usersWithoutPassword = totalUsers - usersWithPassword;
+
   const handleSaveSettings = () => {
     localStorage.setItem('mcm_setting_sla_days', String(slaDays));
     localStorage.setItem('mcm_setting_sync_interval', String(autoSyncInterval));
     localStorage.setItem('mcm_setting_default_cc', defaultCostCenter);
     localStorage.setItem('mcm_setting_sound', String(soundAlerts));
-    onToast('Configurações do sistema salvas com sucesso!', 'success');
+    triggerCompletionFeedback();
+    onToast('Configurações salvas com sucesso.', 'success');
   };
 
-  // Handler de Exportação de Backup JSON Oficial
   const handleExportJSON = async () => {
     try {
       setIsProcessing(true);
       const { filename } = await downloadIDBBackupFile('Backup Administrativo');
-      onToast(`Backup gerado com sucesso: ${filename}`, 'success');
+      onToast(`Backup gerado: ${filename}`, 'success');
     } catch (err) {
       console.error(err);
-      onToast('Erro ao exportar backup completo.', 'error');
+      onToast('Erro ao exportar backup.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handler de Leitura de Arquivo para Restauração
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -205,7 +193,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         } else if (Array.isArray(parsed)) {
           parsedSCs = parsed;
         } else {
-          throw new Error('Formato do arquivo de backup inválido ou incompatível.');
+          throw new Error('Arquivo de backup incompatível.');
         }
 
         setPendingRestore({
@@ -222,36 +210,34 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     reader.readAsText(file);
   };
 
-  // Execução final da Restauração
   const handleConfirmRestore = async () => {
     if (!pendingRestore) return;
     setIsProcessing(true);
     try {
       await onImportData(pendingRestore.scs, pendingRestore.equipments);
       onToast(
-        `Restauração concluída: ${pendingRestore.scs.length} SCs e ${pendingRestore.equipments.length} equipamentos restaurados!`,
+        `Restauração concluída: ${pendingRestore.scs.length} solicitações e ${pendingRestore.equipments.length} itens de inventário.`,
         'success'
       );
       setPendingRestore(null);
     } catch (err) {
       console.error(err);
-      onToast('Erro durante a restauração do banco.', 'error');
+      onToast('Erro durante a restauração dos dados.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handler de Limpeza Total (Danger Zone)
   const handleExecuteDangerClear = async () => {
     if (dangerConfirmText.trim().toUpperCase() !== 'EXCLUIR TUDO') {
-      onToast('Digite EXCLUIR TUDO exatamente como solicitado.', 'error');
+      onToast('Digite EXCLUIR TUDO para confirmar a exclusão.', 'error');
       return;
     }
 
     setIsProcessing(true);
     try {
       await onClearAll();
-      onToast('Banco de dados completamente resetado com sucesso.', 'info');
+      onToast('Todos os dados locais foram excluídos.', 'info');
       setIsDangerZoneOpen(false);
       setDangerConfirmText('');
     } catch (err) {
@@ -262,309 +248,372 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     }
   };
 
-  // Otimização / Reindexação do Banco
   const handleOptimizeDB = async () => {
     setIsProcessing(true);
     try {
       await dbService.getSCs();
       await dbService.getEquipments();
-      await new Promise((r) => setTimeout(r, 600));
-      onToast('Índices reconstruídos e banco local otimizado com sucesso!', 'success');
+      triggerCompletionFeedback();
+      onToast('Banco de dados local otimizado.', 'success');
     } catch {
-      onToast('Erro na otimização do banco.', 'error');
+      onToast('Erro ao otimizar banco.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
+  interface TabItem {
+    id: AdminTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    count?: number;
+  }
+
+  const tabs: TabItem[] = [
+    { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
+    { id: 'backup', label: 'Exportação e Backup', icon: Database },
+    { id: 'config', label: 'Configurações do Sistema', icon: Settings },
+    { id: 'maintenance', label: 'Manutenção do Banco', icon: HardDrive },
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/65 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white dark:bg-[#1e2330] w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700/70 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/40 backdrop-blur-xs">
+      <div className="bg-white w-full max-w-4xl rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh]">
         
-        {/* Header Premium do Painel */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white border-b border-slate-800 shrink-0">
+        {/* Header Claro, Limpo e Profissional */}
+        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-orange-500/20 border border-orange-500/30 rounded-xl text-orange-400">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
               <Shield className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold tracking-tight">Painel do Administrador</h2>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                  MCM Enterprise v2.5
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Central de telemetria, governança de dados, auditoria e backups do sistema
+              <h2 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight">
+                Painel Administrativo
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Gestão central de governança, equipe, backups e parâmetros do sistema
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label="Fechar painel"
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600">
+              <span>Sessão:</span>
+              <strong className="text-slate-900 font-medium">{currentUser.nome}</strong>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Fechar painel"
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Barra de Navegação por Abas */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#181c26] px-6 gap-2 shrink-0 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 py-3 px-3.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'overview'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-[#1e2330]'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            Visão Geral & Telemetria
-          </button>
-
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2 py-3 px-3.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'users'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-[#1e2330]'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            Equipe & Senhas ({users.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('backup')}
-            className={`flex items-center gap-2 py-3 px-3.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'backup'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-[#1e2330]'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            Backups & Exportações
-          </button>
-
-          <button
-            onClick={() => setActiveTab('config')}
-            className={`flex items-center gap-2 py-3 px-3.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'config'
-                ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-[#1e2330]'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            Configurações Globais
-          </button>
-
-          <button
-            onClick={() => setActiveTab('maintenance')}
-            className={`flex items-center gap-2 py-3 px-3.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'maintenance'
-                ? 'border-red-500 text-red-600 dark:text-red-400 bg-white dark:bg-[#1e2330]'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            <Cpu className="w-4 h-4" />
-            Manutenção & Segurança
-          </button>
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-200 bg-white px-6 gap-1 shrink-0 overflow-x-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setActiveTab(tab.id);
+                }}
+                className={`flex items-center gap-2 py-3 px-3 text-xs border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'border-slate-900 text-slate-900 font-semibold'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 font-medium'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-medium ${
+                      isActive ? 'bg-slate-100 text-slate-900' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Conteúdo Dinâmico por Aba */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-800 dark:text-slate-200">
+        {/* Tab Contents */}
+        <div className="p-6 overflow-y-auto flex-1 bg-white text-slate-800">
           
-          {/* ================= ABA 1: VISÃO GERAL & TELEMETRIA ================= */}
+          {/* TAB 0: VISÃO GERAL / PAINEL ADMINISTRATIVO */}
           {activeTab === 'overview' && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6">
               
-              {/* Status do Servidor & Armazenamento */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Cards de Métricas Principais */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 
-                {/* Card de Conexão com Servidor REST */}
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-[#171b24] flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
-                        <Server className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Servidor de Sincronização</h4>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Endpoint REST /api/sync-status</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`inline-block w-2.5 h-2.5 rounded-full ${
-                          serverPing.status === 'online'
-                            ? 'bg-emerald-500 ring-4 ring-emerald-500/20 animate-pulse'
-                            : serverPing.status === 'checking'
-                            ? 'bg-amber-500 ring-4 ring-amber-500/20'
-                            : 'bg-red-500 ring-4 ring-red-500/20'
-                        }`}
-                      />
-                      <span className="text-xs font-bold">
-                        {serverPing.status === 'online'
-                          ? 'Operacional'
-                          : serverPing.status === 'checking'
-                          ? 'Verificando...'
-                          : 'Offline'}
-                      </span>
-                    </div>
+                {/* Card 1: Solicitações */}
+                <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-lg">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-medium">Solicitações (SCs)</span>
+                    <ShoppingCart className="w-4 h-4 text-orange-600" />
                   </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 dark:text-slate-400">
-                      Latência do Ping:{' '}
-                      <strong className="text-slate-800 dark:text-slate-200">
-                        {serverPing.latencyMs !== null ? `${serverPing.latencyMs} ms` : '-'}
-                      </strong>
-                    </span>
-                    <button
-                      onClick={checkServerLatency}
-                      className="text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Testar Conexão
-                    </button>
+                  <div className="text-xl font-bold text-slate-900">{totalSCs}</div>
+                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{emAndamentoSCs} em andamento</span>
+                    <span className="text-emerald-700 font-medium">{concluidasSCs} concluídas</span>
                   </div>
                 </div>
 
-                {/* Card de Armazenamento IndexedDB */}
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-[#171b24] flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
-                        <HardDrive className="w-4 h-4" />
+                {/* Card 2: Inventário TI */}
+                <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-lg">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-medium">Ativos de TI</span>
+                    <Boxes className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="text-xl font-bold text-slate-900">{totalEquipments}</div>
+                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{emUsoEquipments} em uso</span>
+                    <span className="text-blue-700 font-medium">{disponiveisEquipments} disponíveis</span>
+                  </div>
+                </div>
+
+                {/* Card 3: Colaboradores & Acessos */}
+                <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-lg">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-medium">Equipe & Acessos</span>
+                    <Users className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div className="text-xl font-bold text-slate-900">{totalUsers}</div>
+                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{adminUsersCount} administradores</span>
+                    <span className="text-slate-700 font-medium">{totalUsers - adminUsersCount} operadores</span>
+                  </div>
+                </div>
+
+                {/* Card 4: Saúde do Banco / SLAs */}
+                <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-lg">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-medium">Parâmetros & SLA</span>
+                    <Clock className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-xl font-bold text-slate-900">{slaDays} dias</div>
+                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Limite de atraso</span>
+                    {atrasadasSCs > 0 ? (
+                      <span className="text-rose-600 font-bold">{atrasadasSCs} em atraso</span>
+                    ) : (
+                      <span className="text-emerald-700 font-medium">Em dia</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção de Ações Rápidas de Administração */}
+              <div className="border border-slate-200 rounded-lg bg-slate-50/50 p-4.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
+                      Módulos de Gestão Administrativa
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Selecione um módulo específico para gerenciar acessos, dados ou configurações
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  
+                  {/* Card Atalho: Usuários */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenUsersModal?.();
+                    }}
+                    className="p-3.5 bg-white border border-slate-200 hover:border-slate-400 hover:shadow-xs rounded-lg text-left transition-all cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 shrink-0">
+                        <Users className="w-4.5 h-4.5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Armazenamento Local</h4>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Motor IndexedDB (MCM_Industrial_DB)</p>
+                        <h4 className="text-xs font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">
+                          Usuários & Permissões
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Abrir tela dedicada de colaboradores, cargos, senhas e módulos
+                        </p>
                       </div>
                     </div>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
 
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {storageInfo ? `${storageInfo.usageMB} MB em uso` : 'IndexedDB Ativo'}
+                  {/* Card Atalho: Backup */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('backup')}
+                    className="p-3.5 bg-white border border-slate-200 hover:border-slate-400 hover:shadow-xs rounded-lg text-left transition-all cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-md bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                        <Database className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold text-slate-900 group-hover:text-amber-700 transition-colors">
+                          Exportação e Backup
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Download de planilhas CSV e restauração de dados JSON
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+
+                  {/* Card Atalho: Configurações */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('config')}
+                    className="p-3.5 bg-white border border-slate-200 hover:border-slate-400 hover:shadow-xs rounded-lg text-left transition-all cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                        <Settings className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold text-slate-900 group-hover:text-slate-900 transition-colors">
+                          Configurações Globais
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Prazos de SLA, alertas sonoros e centro de custo padrão
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-slate-800 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+
+                  {/* Card Atalho: Manutenção */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('maintenance')}
+                    className="p-3.5 bg-white border border-slate-200 hover:border-slate-400 hover:shadow-xs rounded-lg text-left transition-all cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-md bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                        <HardDrive className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                          Manutenção & Diagnóstico
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Otimização de índices, armazenamento e limpeza
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Status de Segurança e Banco */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Segurança & Senhas */}
+                <div className="p-4 bg-white border border-slate-200 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-slate-600" />
+                      Segurança de Acesso
+                    </h4>
+                    <span className="text-[11px] font-medium text-slate-500">
+                      {usersWithPassword} de {totalUsers} protegidos
                     </span>
                   </div>
 
-                  {storageInfo && (
-                    <div className="mt-3">
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-emerald-600 h-full rounded-full transition-all"
+                      style={{
+                        width: `${totalUsers > 0 ? (usersWithPassword / totalUsers) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Colaboradores com senha requerem verificação de credencial para alternar de perfil ou acessar o sistema.
+                  </p>
+                </div>
+
+                {/* Status do Armazenamento */}
+                <div className="p-4 bg-white border border-slate-200 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-2">
+                      <HardDrive className="w-4 h-4 text-slate-600" />
+                      Banco Local (IndexedDB)
+                    </h4>
+                    <span className="text-[11px] font-medium text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Ativo
+                    </span>
+                  </div>
+
+                  {storageInfo ? (
+                    <div className="space-y-1.5">
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                         <div
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.max(2, storageInfo.percent)}%` }}
+                          className="bg-slate-800 h-full rounded-full transition-all"
+                          style={{ width: `${Math.max(1, storageInfo.percent)}%` }}
                         />
                       </div>
-                      <div className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                        <span>Cota Total: {storageInfo.quotaMB} MB</span>
-                        <span>{storageInfo.percent}% consumido</span>
+                      <div className="flex justify-between text-[11px] text-slate-500">
+                        <span>{storageInfo.usageMB} MB utilizados</span>
+                        <span>{storageInfo.quotaMB} MB cota do navegador</span>
                       </div>
                     </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      Sincronização contínua com Firestore e armazenamento local ativo.
+                    </p>
                   )}
                 </div>
               </div>
 
-              {/* Grid de Contadores do Sistema */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                  <Layers className="w-3.5 h-3.5" />
-                  Métricas de Negócio
-                </h4>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-[#1a1e28]">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Solicitações de Compra</div>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">{totalSCs}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                      <span>{totalAndamento} em andamento</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-[#1a1e28]">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">SCs Concluídas</div>
-                    <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{totalConcluidas}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                      {totalSCs > 0 ? `${Math.round((totalConcluidas / totalSCs) * 100)}% de conclusão` : '0%'}
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-[#1a1e28]">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Itens Solicitados</div>
-                    <div className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{totalItens}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Produtos & Serviços</div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-[#1a1e28]">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Equipamentos de TI</div>
-                    <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{totalEquipamentos}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                      {eqAtivados} ativos / {eqManutencao} manut.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Informações da Aplicação */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#171b24] border border-slate-200 dark:border-slate-800 text-xs space-y-2">
-                <div className="font-bold text-slate-700 dark:text-slate-300">Resumo da Infraestrutura</div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-600 dark:text-slate-400">
-                  <div>
-                    • <strong>Valor Inventário:</strong> R${' '}
-                    {valorTotalInventario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </div>
-                  <div>
-                    • <strong>Alertas de Atraso (&gt;{slaDays}d):</strong> {atrasadas} solicitações
-                  </div>
-                  <div>
-                    • <strong>PWA & Service Worker:</strong> Ativo (Cache v3)
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
-          {/* ================= ABA: GESTÃO DE USUÁRIOS E SENHAS ================= */}
-          {activeTab === 'users' && (
-            <div className="animate-fade-in">
-              <UserManagementTab
-                users={users}
-                currentUser={currentUser}
-                onRefreshUsers={onRefreshUsers}
-                onToast={onToast}
-              />
-            </div>
-          )}
-
-          {/* ================= ABA 2: BACKUPS & EXPORTAÇÕES ================= */}
+          {/* TAB 1: EXPORTAÇÃO E BACKUP */}
           {activeTab === 'backup' && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-5">
               
-              {/* Preview de Restauração se houver arquivo selecionado */}
+              {/* Preview de Restauração */}
               {pendingRestore && (
-                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80">
-                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-xs mb-1">
-                    <AlertTriangle className="w-4 h-4" />
-                    Confirmar Restauração de Backup
+                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs">
+                  <div className="flex items-center gap-2 font-semibold text-amber-900 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    Confirmar Restauração de Dados
                   </div>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
-                    Arquivo identificado: <strong>{pendingRestore.sourceFilename}</strong> contendo{' '}
+                  <p className="text-amber-800 mb-3">
+                    Arquivo: <strong>{pendingRestore.sourceFilename}</strong> com{' '}
                     <strong>{pendingRestore.scs.length} Solicitações de Compra</strong> e{' '}
-                    <strong>{pendingRestore.equipments.length} Equipamentos</strong>.
+                    <strong>{pendingRestore.equipments.length} Ativos de TI</strong>.
                   </p>
                   <div className="flex gap-2">
                     <button
                       onClick={handleConfirmRestore}
                       disabled={isProcessing}
-                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-medium cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      {isProcessing ? 'Restaurando...' : 'Aplicar Restauração'}
+                      {isProcessing ? 'Restaurando...' : 'Confirmar e Restaurar'}
                     </button>
                     <button
                       onClick={() => setPendingRestore(null)}
-                      className="px-3.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors cursor-pointer"
+                      className="px-3.5 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50 cursor-pointer text-xs"
                     >
                       Cancelar
                     </button>
@@ -572,83 +621,66 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </div>
               )}
 
-              {/* Bloco de Exportações */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                  <Download className="w-3.5 h-3.5" />
-                  Gerar Backups & Planilhas
-                </h4>
+              {/* Seção de Exportações */}
+              <div className="bg-slate-50/60 p-4.5 rounded-lg border border-slate-200 space-y-3">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
+                    Exportação de Relatórios em Planilha (CSV / Excel)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Gera planilhas compatíveis com Excel e visualizadores padrão.
+                  </p>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  
-                  {/* Backup Completo JSON */}
-                  <button
-                    onClick={handleExportJSON}
-                    disabled={isProcessing}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28] hover:border-orange-500 dark:hover:border-orange-500 transition-all text-left group cursor-pointer shadow-xs hover:shadow-md"
-                  >
-                    <div className="p-2.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 w-fit mb-3 group-hover:scale-110 transition-transform">
-                      <Database className="w-5 h-5" />
-                    </div>
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Backup Completo (JSON)</div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                      Cópia integral criptografável de SCs, Inventário e Histórico
-                    </p>
-                  </button>
-
-                  {/* Planilha SCs CSV */}
+                <div className="flex flex-wrap gap-2.5 pt-1">
                   <button
                     onClick={() => {
                       exportToCSV(scs);
-                      onToast('Planilha de SCs exportada com sucesso!', 'success');
+                      triggerCompletionFeedback();
+                      onToast('Planilha de SCs exportada com sucesso.', 'success');
                     }}
                     disabled={scs.length === 0}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28] hover:border-emerald-500 dark:hover:border-emerald-500 transition-all text-left group cursor-pointer shadow-xs hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded-md text-slate-800 transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
                   >
-                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 w-fit mb-3 group-hover:scale-110 transition-transform">
-                      <FileSpreadsheet className="w-5 h-5" />
-                    </div>
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Planilha SCs (CSV/Excel)</div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                      Exporta todas as {totalSCs} solicitações com itens detalhados
-                    </p>
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <span>Exportar Solicitações de Compra ({scs.length} SCs)</span>
                   </button>
 
-                  {/* Planilha Equipamentos CSV */}
                   <button
                     onClick={() => {
                       exportEquipmentsToCSV(equipments);
-                      onToast('Planilha de Inventário exportada com sucesso!', 'success');
+                      triggerCompletionFeedback();
+                      onToast('Planilha de Inventário exportada com sucesso.', 'success');
                     }}
                     disabled={equipments.length === 0}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28] hover:border-purple-500 dark:hover:border-purple-500 transition-all text-left group cursor-pointer shadow-xs hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded-md text-slate-800 transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
                   >
-                    <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 w-fit mb-3 group-hover:scale-110 transition-transform">
-                      <Laptop className="w-5 h-5" />
-                    </div>
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Inventário TI (CSV/Excel)</div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                      Exporta {totalEquipamentos} ativos de TI, valores e AFs
-                    </p>
+                    <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                    <span>Exportar Inventário de TI ({equipments.length} Itens)</span>
                   </button>
                 </div>
               </div>
 
-              {/* Bloco de Restauração */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                  <Upload className="w-3.5 h-3.5" />
-                  Restauração de Backup
-                </h4>
+              {/* Seção de Backup Completo */}
+              <div className="bg-slate-50/60 p-4.5 rounded-lg border border-slate-200 space-y-3">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
+                    Backup Integral e Restauração (JSON)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Gera uma cópia de segurança completa para restauração ou migração entre máquinas.
+                  </p>
+                </div>
 
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center bg-slate-50/50 dark:bg-[#161a24] hover:bg-slate-50 dark:hover:bg-[#1a1f2b] transition-colors">
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Selecione um arquivo de backup (.JSON) para restaurar
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 mb-3">
-                    Compatível com backups gerados pelo sistema MCM v1.0 e v2.0
-                  </p>
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  <button
+                    onClick={handleExportJSON}
+                    disabled={isProcessing}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white rounded-md transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>{isProcessing ? 'Gerando Backup...' : 'Baixar Cópia de Backup'}</span>
+                  </button>
 
                   <input
                     type="file"
@@ -659,192 +691,181 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md transition-colors cursor-pointer shadow-2xs"
                   >
-                    <Upload className="w-3.5 h-3.5" />
-                    Procurar Arquivo de Backup
+                    <Upload className="w-4 h-4" />
+                    <span>Restaurar Backup</span>
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ================= ABA 3: CONFIGURAÇÕES GLOBAIS ================= */}
+          {/* TAB 3: CONFIGURAÇÕES DO SISTEMA */}
           {activeTab === 'config' && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* SLA de Atraso */}
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28]">
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-                    SLA Limite para Alerta de Atraso
-                  </label>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                    Quantidade de dias corridos antes de sinalizar a SC em vermelho
-                  </p>
-                  <select
-                    value={slaDays}
-                    onChange={(e) => setSlaDays(Number(e.target.value))}
-                    className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#151922] font-semibold"
-                  >
-                    <option value={7}>7 dias corridos (Rápido)</option>
-                    <option value={15}>15 dias corridos (Padrão MCM)</option>
-                    <option value={30}>30 dias corridos (Projetos Longos)</option>
-                    <option value={45}>45 dias corridos (Importações)</option>
-                  </select>
-                </div>
-
-                {/* Intervalo de Polling */}
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28]">
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-                    Frequência de Sincronização em Background
-                  </label>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                    Intervalo para consulta de atualizações de outros usuários
-                  </p>
-                  <select
-                    value={autoSyncInterval}
-                    onChange={(e) => setAutoSyncInterval(Number(e.target.value))}
-                    className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#151922] font-semibold"
-                  >
-                    <option value={10}>A cada 10 segundos (Tempo Real)</option>
-                    <option value={30}>A cada 30 segundos (Recomendado)</option>
-                    <option value={60}>A cada 1 minuto (Econômico)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Centro de Custo Padrão */}
-              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28]">
-                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-                  Centro de Custo / Setor Padrão
-                </label>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
-                  Preenchimento automático para novas solicitações criadas manualmente
-                </p>
-                <input
-                  type="text"
-                  value={defaultCostCenter}
-                  onChange={(e) => setDefaultCostCenter(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#151922]"
-                />
-              </div>
-
-              {/* Alertas Sonoros & Feedback Tátil */}
-              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-4 max-w-2xl">
+              <div className="bg-slate-50/60 p-5 rounded-lg border border-slate-200 space-y-4">
                 <div>
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Feedback Tátil & Sonoro (Haptic API + Chime)
+                  <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
+                    Parâmetros Operacionais
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Definições gerais para SLAs, intervalos de sincronização e valores padrão
+                  </p>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Limite de SLA para Alerta de Atraso
+                    </label>
+                    <select
+                      value={slaDays}
+                      onChange={(e) => setSlaDays(Number(e.target.value))}
+                      className="w-full text-xs px-3 py-2 rounded-md border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                    >
+                      <option value={7}>7 dias corridos</option>
+                      <option value={15}>15 dias corridos (Padrão)</option>
+                      <option value={30}>30 dias corridos</option>
+                      <option value={45}>45 dias corridos</option>
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Solicitações em aberto com prazo superior a este limite serão sinalizadas como pendentes de atenção.
+                    </p>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Microvibrações no smartphone e acorde harmônico ao concluir tarefas e alternar status de SCs
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Intervalo de Sincronização Automática
+                    </label>
+                    <select
+                      value={autoSyncInterval}
+                      onChange={(e) => setAutoSyncInterval(Number(e.target.value))}
+                      className="w-full text-xs px-3 py-2 rounded-md border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                    >
+                      <option value={10}>A cada 10 segundos</option>
+                      <option value={30}>A cada 30 segundos (Recomendado)</option>
+                      <option value={60}>A cada 1 minuto</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Centro de Custo / Solicitante Padrão
+                    </label>
+                    <input
+                      type="text"
+                      value={defaultCostCenter}
+                      onChange={(e) => setDefaultCostCenter(e.target.value)}
+                      className="w-full text-xs px-3 py-2 rounded-md border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200">
+                    <label className="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={soundAlerts}
+                        onChange={(e) => setSoundAlerts(e.target.checked)}
+                        className="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-slate-900"
+                      />
+                      <span>Ativar notificações sonoras e retorno tátil de confirmação</span>
+                    </label>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+
+                <div className="pt-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => {
-                      triggerCompletionFeedback();
-                      onToast('Testando vibração tátil e som...', 'info');
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-orange-500/40 text-orange-600 dark:text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-all cursor-pointer select-none active:scale-95"
+                    onClick={handleSaveSettings}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-medium cursor-pointer transition-colors shadow-2xs"
                   >
-                    Testar Haptic
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Salvar Configurações</span>
                   </button>
-                  <input
-                    type="checkbox"
-                    checked={soundAlerts}
-                    onChange={(e) => setSoundAlerts(e.target.checked)}
-                    className="w-4 h-4 text-orange-600 rounded border-slate-300 cursor-pointer"
-                  />
                 </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={handleSaveSettings}
-                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Salvar Parâmetros
-                </button>
               </div>
             </div>
           )}
 
-          {/* ================= ABA 4: MANUTENÇÃO & SEGURANÇA ================= */}
+          {/* TAB 4: MANUTENÇÃO & BANCO */}
           {activeTab === 'maintenance' && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-4 max-w-2xl">
               
-              {/* Otimização de Índices */}
-              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1e28] flex items-center justify-between">
+              {/* Otimização */}
+              <div className="bg-slate-50/60 p-4.5 rounded-lg border border-slate-200 space-y-3">
                 <div>
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Zap className="w-4 h-4 text-amber-500" />
-                    Reindexar e Otimizar Motor IndexedDB
+                  <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
+                    Armazenamento Local e Diagnóstico
+                  </h3>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {storageInfo ? (
+                      <p>
+                        Armazenamento IndexedDB: <strong>{storageInfo.usageMB} MB</strong> de{' '}
+                        <strong>{storageInfo.quotaMB} MB</strong> disponíveis ({storageInfo.percent}% de ocupação).
+                      </p>
+                    ) : (
+                      <p>Banco IndexedDB e Firestore ativos e operacionais.</p>
+                    )}
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Reconstrói os índices de busca por número, filial, AF e status para máxima performance
-                  </p>
                 </div>
+
                 <button
+                  type="button"
                   onClick={handleOptimizeDB}
                   disabled={isProcessing}
-                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-slate-300 dark:border-slate-700"
+                  className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-md text-xs font-medium cursor-pointer shadow-2xs"
                 >
-                  {isProcessing ? 'Otimizando...' : 'Executar Otimização'}
+                  {isProcessing ? 'Otimizando...' : 'Otimizar e Reindexar Banco Local'}
                 </button>
               </div>
 
-              {/* Zona de Perigo com Proteção por Digitação */}
-              <div className="p-4 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20">
-                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs mb-1">
+              {/* Zona de Perigo / Limpeza */}
+              <div className="bg-red-50/40 p-4.5 rounded-lg border border-red-200 space-y-3">
+                <div className="flex items-center gap-2 text-red-700 font-semibold text-xs">
                   <AlertTriangle className="w-4 h-4" />
-                  Zona de Perigo (Danger Zone)
+                  <span>Exclusão Total de Dados Locais</span>
                 </div>
-                <p className="text-xs text-red-600 dark:text-red-300/80 mb-4">
-                  Ações nesta área são irreversíveis e apagarão todos os registros de solicitações e inventário.
+                <p className="text-xs text-red-600">
+                  Esta ação apaga os registros locais armazenados neste navegador.
                 </p>
 
                 {!isDangerZoneOpen ? (
                   <button
+                    type="button"
                     onClick={() => setIsDangerZoneOpen(true)}
-                    className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-medium cursor-pointer shadow-2xs"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Abrir Painel de Limpeza Total
+                    Iniciar Exclusão de Dados
                   </button>
                 ) : (
-                  <div className="p-3 bg-white dark:bg-[#1c181c] rounded-lg border border-red-300 dark:border-red-800 space-y-3">
-                    <p className="text-xs font-semibold text-red-800 dark:text-red-300">
-                      Para confirmar a limpeza total de todos os dados do sistema, digite exatamente:{' '}
-                      <code className="bg-red-100 dark:bg-red-900/60 px-1.5 py-0.5 rounded font-mono font-bold text-red-700 dark:text-red-200">
-                        EXCLUIR TUDO
-                      </code>
+                  <div className="p-3.5 bg-white rounded-md border border-red-200 space-y-2.5">
+                    <p className="text-xs text-slate-700">
+                      Para confirmar, digite <strong className="text-red-700 font-mono">EXCLUIR TUDO</strong>:
                     </p>
-
                     <input
                       type="text"
-                      placeholder="Digite EXCLUIR TUDO"
+                      placeholder="EXCLUIR TUDO"
                       value={dangerConfirmText}
                       onChange={(e) => setDangerConfirmText(e.target.value)}
-                      className="w-full text-xs px-3 py-2 rounded-lg border border-red-300 dark:border-red-800 bg-red-50/30 dark:bg-red-950/30 font-mono font-bold text-red-900 dark:text-red-100"
+                      className="w-full text-xs px-3 py-1.5 rounded-md border border-red-300 font-mono font-semibold text-red-800 focus:outline-none focus:ring-1 focus:ring-red-600"
                     />
-
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={handleExecuteDangerClear}
                         disabled={dangerConfirmText.trim().toUpperCase() !== 'EXCLUIR TUDO' || isProcessing}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-medium cursor-pointer disabled:opacity-40"
                       >
-                        {isProcessing ? 'Limpando banco...' : 'Confirmar e Apagar Todo o Banco'}
+                        {isProcessing ? 'Excluindo...' : 'Confirmar Exclusão'}
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           setIsDangerZoneOpen(false);
                           setDangerConfirmText('');
                         }}
-                        className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-medium cursor-pointer"
                       >
                         Cancelar
                       </button>
@@ -856,15 +877,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           )}
         </div>
 
-        {/* Footer do Modal */}
-        <div className="px-6 py-3.5 bg-slate-100 dark:bg-[#171b24] border-t border-slate-200 dark:border-slate-800 flex justify-between items-center shrink-0">
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <Clock className="w-3 h-3" />
-            Última verificação: {new Date().toLocaleTimeString('pt-BR')}
+        {/* Footer Claro e Funcional */}
+        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span>Sistema operacional e conectado ao banco</span>
           </div>
+
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-medium cursor-pointer transition-colors shadow-2xs"
           >
             Fechar
           </button>

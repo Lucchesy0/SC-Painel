@@ -1,28 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Users,
   UserPlus,
-  ShieldCheck,
-  ShoppingCart,
-  Truck,
-  BarChart2,
   KeyRound,
   Edit2,
   Trash2,
   Lock,
   Unlock,
-  Check,
   AlertCircle,
   X,
+  Search,
+  Building,
+  Mail,
+  Shield,
+  ShoppingCart,
+  Boxes,
+  BarChart2,
+  Check,
+  FileSpreadsheet,
+  Download,
+  Settings,
   Sparkles,
-  Save,
+  Sliders,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserPermissions } from '../types';
 import {
-  getRoleLabel,
+  getUserPermissions,
+  getUserCargo,
   getRoleBadgeClass,
-  getRolePermissions,
+  DEFAULT_USER_PERMISSIONS,
+  ADMIN_USER_PERMISSIONS,
   authService,
 } from '../services/authService';
 
@@ -40,72 +48,163 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
   onToast,
 }) => {
   const safeUsers = Array.isArray(users) && users.length > 0 ? users : authService.getAvailableUsers();
-  // Modal states
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+
+  // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [passwordModalUser, setPasswordModalUser] = useState<UserProfile | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
 
-  // Form states for Add/Edit
+  // Form State
   const [formData, setFormData] = useState<{
     nome: string;
     email: string;
-    role: UserRole;
+    cargo: string;
     departamento: string;
     password: string;
     avatarColor: string;
-    canAccessSC: boolean;
-    canAccessInventario: boolean;
+    permissions: UserPermissions;
   }>({
     nome: '',
     email: '',
-    role: 'comprador',
+    cargo: 'Comprador',
     departamento: 'Suprimentos & Compras',
     password: '',
-    avatarColor: 'bg-orange-600',
-    canAccessSC: true,
-    canAccessInventario: true,
+    avatarColor: 'bg-slate-700',
+    permissions: { ...DEFAULT_USER_PERMISSIONS },
   });
 
   const [newPassword, setNewPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const colors = [
+    { label: 'Grafite', class: 'bg-slate-700' },
     { label: 'Laranja', class: 'bg-orange-600' },
-    { label: 'Índigo', class: 'bg-indigo-600' },
-    { label: 'Esmeralda', class: 'bg-emerald-600' },
-    { label: 'Roxo', class: 'bg-purple-600' },
     { label: 'Azul', class: 'bg-blue-600' },
-    { label: 'Rosa', class: 'bg-pink-600' },
-    { label: 'Teal', class: 'bg-teal-600' },
+    { label: 'Esmeralda', class: 'bg-emerald-600' },
+    { label: 'Índigo', class: 'bg-indigo-600' },
+    { label: 'Roxo', class: 'bg-purple-600' },
+    { label: 'Ciano', class: 'bg-cyan-700' },
+  ];
+
+  // Sugestões rápidas de preenchimento de cargo para agilidade do usuário
+  const cargoSuggestions = [
+    'Comprador',
+    'Almoxarifado / Recebimento',
+    'Analista de Suprimentos',
+    'Coordenador de TI',
+    'Técnico de Campo',
+    'Gestor / Diretoria',
+    'Administrador Geral',
+    'Assistente Administrativo',
+    'Engenheiro de Obras',
   ];
 
   const handleOpenAdd = () => {
     setFormData({
       nome: '',
       email: '',
-      role: 'comprador',
-      departamento: 'Suprimentos & Compras',
+      cargo: 'Comprador',
+      departamento: 'Suprimentos',
       password: '',
-      avatarColor: 'bg-orange-600',
-      canAccessSC: true,
-      canAccessInventario: true,
+      avatarColor: 'bg-slate-700',
+      permissions: { ...DEFAULT_USER_PERMISSIONS },
     });
     setIsAddModalOpen(true);
   };
 
   const handleOpenEdit = (user: UserProfile) => {
+    const userPerms = getUserPermissions(user);
     setEditingUser(user);
     setFormData({
       nome: user.nome,
       email: user.email,
-      role: user.role,
-      departamento: user.departamento,
+      cargo: getUserCargo(user),
+      departamento: user.departamento || 'Geral',
       password: user.password || '',
-      avatarColor: user.avatarColor || 'bg-slate-600',
-      canAccessSC: user.canAccessSC ?? true,
-      canAccessInventario: user.canAccessInventario ?? true,
+      avatarColor: user.avatarColor || 'bg-slate-700',
+      permissions: { ...userPerms },
     });
+  };
+
+  // Helper para atualizar uma permissão específica
+  const handleTogglePermission = (key: keyof UserPermissions) => {
+    setFormData((prev) => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [key]: !prev.permissions[key],
+      },
+    }));
+  };
+
+  // Presets rápidos opcionais (para preencher checkboxes com 1 clique se o admin desejar)
+  const applyPreset = (type: 'total' | 'compras' | 'almoxarife' | 'ti' | 'consulta') => {
+    if (type === 'total') {
+      setFormData((prev) => ({ ...prev, permissions: { ...ADMIN_USER_PERMISSIONS } }));
+    } else if (type === 'compras') {
+      setFormData((prev) => ({
+        ...prev,
+        permissions: {
+          ...DEFAULT_USER_PERMISSIONS,
+          canAccessSC: true,
+          canCreateSC: true,
+          canEditSC: true,
+          canDeleteSC: false,
+          canReceiveItems: true,
+          canAccessAnalytics: true,
+          canExportReports: true,
+        },
+      }));
+    } else if (type === 'almoxarife') {
+      setFormData((prev) => ({
+        ...prev,
+        permissions: {
+          ...DEFAULT_USER_PERMISSIONS,
+          canAccessSC: true,
+          canCreateSC: false,
+          canEditSC: false,
+          canDeleteSC: false,
+          canReceiveItems: true,
+          canAccessInventario: true,
+          canManageEquipments: true,
+          canExportReports: true,
+        },
+      }));
+    } else if (type === 'ti') {
+      setFormData((prev) => ({
+        ...prev,
+        permissions: {
+          ...DEFAULT_USER_PERMISSIONS,
+          canAccessInventario: true,
+          canManageEquipments: true,
+          canAccessAnalytics: true,
+          canExportReports: true,
+          canImportData: true,
+        },
+      }));
+    } else if (type === 'consulta') {
+      setFormData((prev) => ({
+        ...prev,
+        permissions: {
+          canAccessSC: true,
+          canAccessInventario: true,
+          canAccessAnalytics: true,
+          canAccessAdmin: false,
+          canManageUsers: false,
+          canCreateSC: false,
+          canEditSC: false,
+          canDeleteSC: false,
+          canReceiveItems: false,
+          canManageEquipments: false,
+          canExportReports: true,
+          canImportData: false,
+        },
+      }));
+    }
   };
 
   const handleSaveAdd = async (e: React.FormEvent) => {
@@ -118,20 +217,21 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     setIsSubmitting(true);
     try {
       await authService.createUser({
-        nome: formData.nome,
-        email: formData.email,
-        role: formData.role,
-        departamento: formData.departamento,
-        password: formData.password,
+        nome: formData.nome.trim(),
+        email: formData.email.trim(),
+        cargo: formData.cargo.trim() || 'Colaborador',
+        departamento: formData.departamento.trim() || 'Geral',
+        password: formData.password ? formData.password.trim() : undefined,
         avatarColor: formData.avatarColor,
-        canAccessSC: formData.canAccessSC,
-        canAccessInventario: formData.canAccessInventario,
+        permissions: formData.permissions,
+        canAccessSC: formData.permissions.canAccessSC,
+        canAccessInventario: formData.permissions.canAccessInventario,
       });
-      onToast(`Usuário ${formData.nome} criado com sucesso no Firestore!`, 'success');
+      onToast(`Usuário ${formData.nome} cadastrado com sucesso.`, 'success');
       setIsAddModalOpen(false);
       onRefreshUsers();
     } catch (err) {
-      console.error('Erro ao criar usuário:', err);
+      console.error('Erro ao cadastrar usuário:', err);
       onToast('Erro ao cadastrar usuário.', 'error');
     } finally {
       setIsSubmitting(false);
@@ -149,16 +249,20 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     setIsSubmitting(true);
     try {
       await authService.updateUser(editingUser.id, {
-        nome: formData.nome,
-        email: formData.email,
-        role: formData.role,
-        departamento: formData.departamento,
+        nome: formData.nome.trim(),
+        email: formData.email.trim(),
+        cargo: formData.cargo.trim() || 'Colaborador',
+        departamento: formData.departamento.trim() || 'Geral',
         password: formData.password ? formData.password.trim() : undefined,
         avatarColor: formData.avatarColor,
-        canAccessSC: formData.canAccessSC,
-        canAccessInventario: formData.canAccessInventario,
+        permissions: formData.permissions,
+        canAccessSC: formData.permissions.canAccessSC,
+        canAccessInventario: formData.permissions.canAccessInventario,
+        canAccessAnalytics: formData.permissions.canAccessAnalytics,
+        canAccessAdmin: formData.permissions.canAccessAdmin,
+        canManageUsers: formData.permissions.canManageUsers,
       });
-      onToast(`Usuário ${formData.nome} atualizado no Firestore!`, 'success');
+      onToast(`Usuário ${formData.nome} atualizado com sucesso.`, 'success');
       setEditingUser(null);
       onRefreshUsers();
     } catch (err) {
@@ -175,14 +279,15 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
 
     setIsSubmitting(true);
     try {
+      const trimmed = newPassword.trim();
       await authService.updateUser(passwordModalUser.id, {
-        password: newPassword.trim() ? newPassword.trim() : undefined,
-        requiresPassword: Boolean(newPassword.trim().length > 0),
+        password: trimmed ? trimmed : undefined,
+        requiresPassword: Boolean(trimmed.length > 0),
       });
       onToast(
-        newPassword.trim()
-          ? `Senha de ${passwordModalUser.nome} alterada com sucesso!`
-          : `Senha de ${passwordModalUser.nome} removida com sucesso!`,
+        trimmed
+          ? `Senha de ${passwordModalUser.nome} alterada com sucesso.`
+          : `Senha de ${passwordModalUser.nome} removida com sucesso.`,
         'success'
       );
       setPasswordModalUser(null);
@@ -200,7 +305,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     if (!userToDelete) return;
     try {
       await authService.deleteUser(userToDelete.id);
-      onToast(`Usuário ${userToDelete.nome} excluído com sucesso!`, 'info');
+      onToast(`Usuário ${userToDelete.nome} excluído.`, 'info');
       setUserToDelete(null);
       onRefreshUsers();
     } catch (err) {
@@ -209,368 +314,592 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     }
   };
 
-  const getRoleIcon = (role: UserRole) => {
-    switch (role) {
-      case 'admin':
-        return ShieldCheck;
-      case 'usuario':
-        return Users;
-      case 'comprador':
-        return ShoppingCart;
-      case 'almoxarifado':
-        return Truck;
-      case 'gestor':
-        return BarChart2;
-      default:
-        return Users;
-    }
-  };
+  // Filter users
+  const filteredUsers = useMemo(() => {
+    return safeUsers.filter((user) => {
+      const term = searchTerm.trim().toLowerCase();
+      const cargo = getUserCargo(user).toLowerCase();
+      const depto = (user.departamento || '').toLowerCase();
+      const nome = user.nome.toLowerCase();
+      const email = user.email.toLowerCase();
+
+      const matchesSearch =
+        term === '' ||
+        nome.includes(term) ||
+        email.includes(term) ||
+        cargo.includes(term) ||
+        depto.includes(term);
+
+      const perms = getUserPermissions(user);
+
+      if (filterType === 'sc') return matchesSearch && perms.canAccessSC;
+      if (filterType === 'inventario') return matchesSearch && perms.canAccessInventario;
+      if (filterType === 'admin') return matchesSearch && (perms.canAccessAdmin || perms.canManageUsers);
+      if (filterType === 'password') return matchesSearch && Boolean(user.password && user.password.trim().length > 0);
+
+      return matchesSearch;
+    });
+  }, [safeUsers, searchTerm, filterType]);
+
+  // Render do bloco de configuração de permissões
+  const renderPermissionsConfig = () => (
+    <div className="space-y-3 pt-2 border-t border-slate-200">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
+          <Sliders className="w-3.5 h-3.5 text-slate-700" />
+          <span>Permissões Personalizadas do Usuário</span>
+        </div>
+
+        {/* Presets Rápidos */}
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-slate-400 mr-1 hidden sm:inline">Modelos rápidos:</span>
+          <button
+            type="button"
+            onClick={() => applyPreset('total')}
+            className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium cursor-pointer"
+            title="Conceder todas as permissões"
+          >
+            Total
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset('compras')}
+            className="px-2 py-0.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 font-medium cursor-pointer"
+            title="Configurar foco em Solicitações de Compra"
+          >
+            Compras
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset('almoxarife')}
+            className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium cursor-pointer"
+            title="Configurar foco em Almoxarifado e Recebimento"
+          >
+            Almoxarifado
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset('consulta')}
+            className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium cursor-pointer"
+            title="Somente visualização e consulta"
+          >
+            Consulta
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Bloco 1: Módulos de Acesso */}
+        <div className="p-3 bg-slate-50/90 rounded-lg border border-slate-200 space-y-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+            <Boxes className="w-3.5 h-3.5 text-slate-500" />
+            <span>Módulos de Acesso</span>
+          </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canAccessSC}
+                onChange={() => handleTogglePermission('canAccessSC')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Painel de Solicitações (SC)</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canAccessInventario}
+                onChange={() => handleTogglePermission('canAccessInventario')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Inventário de TI / Ativos</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canAccessAnalytics}
+                onChange={() => handleTogglePermission('canAccessAnalytics')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Indicadores & Gráficos</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canAccessAdmin}
+                onChange={() => handleTogglePermission('canAccessAdmin')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Painel Administrativo</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canManageUsers}
+                onChange={() => handleTogglePermission('canManageUsers')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Gestão de Usuários</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Bloco 2: Ações em Solicitações */}
+        <div className="p-3 bg-slate-50/90 rounded-lg border border-slate-200 space-y-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+            <ShoppingCart className="w-3.5 h-3.5 text-slate-500" />
+            <span>Operações de Compras (SC)</span>
+          </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canCreateSC}
+                onChange={() => handleTogglePermission('canCreateSC')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Criar Novas Solicitações</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canEditSC}
+                onChange={() => handleTogglePermission('canEditSC')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Editar Dados de SCs</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canDeleteSC}
+                onChange={() => handleTogglePermission('canDeleteSC')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span className="text-red-700 font-medium">Excluir Solicitações</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canReceiveItems}
+                onChange={() => handleTogglePermission('canReceiveItems')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Recebimento / Almoxarifado</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Bloco 3: TI e Dados */}
+        <div className="p-3 bg-slate-50/90 rounded-lg border border-slate-200 space-y-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+            <Shield className="w-3.5 h-3.5 text-slate-500" />
+            <span>TI, Relatórios & Dados</span>
+          </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canManageEquipments}
+                onChange={() => handleTogglePermission('canManageEquipments')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Gerenciar Equipamentos TI</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canExportReports}
+                onChange={() => handleTogglePermission('canExportReports')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Exportar Dados (PDF / Excel / CSV)</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.permissions.canImportData}
+                onChange={() => handleTogglePermission('canImportData')}
+                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
+              />
+              <span>Importar Planilhas de Dados</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner with Action */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-linear-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-orange-600 text-white shadow-xs">
-              <Users className="w-5 h-5" />
-            </span>
-            <div>
-              <h3 className="text-base font-black text-slate-900 dark:text-white">
-                Gestão de Usuários e Senhas da Equipe
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Cadastre membros da equipe, defina senhas de acesso e atribua permissões personalizadas
-              </p>
-            </div>
+    <div className="space-y-4">
+      {/* Search & Actions Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="flex flex-1 items-center gap-2.5">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar colaborador, cargo, e-mail ou setor..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900"
+          >
+            <option value="all">Todos os Colaboradores ({safeUsers.length})</option>
+            <option value="sc">Com Acesso a SCs</option>
+            <option value="inventario">Com Acesso a TI</option>
+            <option value="admin">Acesso Administrativo</option>
+            <option value="password">Com Senha de Acesso</option>
+          </select>
         </div>
 
         <button
           type="button"
           onClick={handleOpenAdd}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-orange-600/20 cursor-pointer shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-md transition-colors cursor-pointer shrink-0 shadow-2xs"
         >
           <UserPlus className="w-4 h-4" />
-          <span>+ Novo Usuário</span>
+          <span>Novo Usuário</span>
         </button>
       </div>
 
-      {/* Role Counts Mini-Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {(['admin', 'usuario', 'comprador', 'almoxarifado', 'gestor'] as UserRole[]).map((r) => {
-          const count = safeUsers.filter((u) => u.role === r).length;
-          const badge = getRoleBadgeClass(r);
-          const Icon = getRoleIcon(r);
-          return (
-            <div
-              key={r}
-              className="p-3 rounded-xl bg-white dark:bg-[#151a26] border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs"
-            >
-              <div className="flex items-center gap-2">
-                <span className={`p-1.5 rounded-lg ${badge.bg} ${badge.text}`}>
-                  <Icon className="w-4 h-4" />
-                </span>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 capitalize">
-                  {r === 'usuario' ? 'Usuário' : r}
-                </span>
-              </div>
-              <span className="text-sm font-black text-slate-900 dark:text-white">{count}</span>
-            </div>
-          );
-        })}
-      </div>
+      {/* Users Table */}
+      <div className="border border-slate-200 rounded-lg bg-white overflow-hidden shadow-2xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px] tracking-wider whitespace-nowrap">
+                <th className="py-3 px-4 min-w-[220px]">Colaborador</th>
+                <th className="py-3 px-4 min-w-[160px]">Cargo / Função</th>
+                <th className="py-3 px-4 min-w-[130px]">Setor</th>
+                <th className="py-3 px-4 min-w-[240px]">Permissões de Acesso</th>
+                <th className="py-3 px-4 min-w-[120px]">Autenticação</th>
+                <th className="py-3 px-4 text-right min-w-[100px]">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-800">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-slate-400 text-xs">
+                    Nenhum colaborador encontrado com os filtros selecionados.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => {
+                  const isMe = currentUser.id === user.id;
+                  const hasPassword = Boolean(user.password && user.password.trim().length > 0);
+                  const cargo = getUserCargo(user);
+                  const badge = getRoleBadgeClass(cargo);
+                  const perms = getUserPermissions(user);
 
-      {/* User Cards Grid */}
-      <div className="space-y-3">
-        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-          Membros Cadastrados na Nuvem Firestore ({safeUsers.length})
-        </h4>
+                  return (
+                    <tr
+                      key={user.id}
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        isMe ? 'bg-amber-50/20' : ''
+                      }`}
+                    >
+                      {/* Name & Email */}
+                      <td className="py-3 px-4 align-middle">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-8 h-8 rounded-md ${
+                              user.avatarColor || 'bg-slate-700'
+                            } text-white flex items-center justify-center font-semibold text-xs shrink-0`}
+                          >
+                            {user.nome.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 flex items-center gap-1.5 truncate">
+                              <span className="truncate">{user.nome}</span>
+                              {isMe && (
+                                <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                                  Você
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5 truncate">
+                              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{user.email}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {safeUsers.map((user) => {
-            const badge = getRoleBadgeClass(user.role);
-            const Icon = getRoleIcon(user.role);
-            const isMe = currentUser.id === user.id;
-            const hasPassword = Boolean(user.password && user.password.trim().length > 0);
+                      {/* Cargo / Função Badge */}
+                      <td className="py-3 px-4 whitespace-nowrap align-middle">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${badge.bg} ${badge.text} ${badge.border}`}
+                        >
+                          {cargo}
+                        </span>
+                      </td>
 
-            return (
-              <div
-                key={user.id}
-                className={`p-4 rounded-2xl bg-white dark:bg-[#151a26] border transition-all shadow-xs flex flex-col justify-between ${
-                  isMe
-                    ? 'border-orange-500/40 ring-1 ring-orange-500/30'
-                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`w-10 h-10 rounded-xl ${
-                          user.avatarColor || 'bg-slate-600'
-                        } text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0`}
-                      >
-                        {user.nome.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h5 className="font-bold text-sm text-slate-900 dark:text-white truncate">
-                            {user.nome}
-                          </h5>
-                          {isMe && (
-                            <span className="px-1.5 py-0.2 text-[9px] font-black rounded-md bg-orange-500/20 text-orange-600 dark:text-orange-400">
-                              VOCÊ
-                            </span>
+                      {/* Department */}
+                      <td className="py-3 px-4 text-slate-600 text-xs whitespace-nowrap align-middle">
+                        <span className="flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{user.departamento || 'Geral'}</span>
+                        </span>
+                      </td>
+
+                      {/* Permissions Badges (Organizado em Linha Única) */}
+                      <td className="py-3 px-4 align-middle">
+                        {perms.canAccessAdmin && perms.canManageUsers ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80 whitespace-nowrap">
+                            <Shield className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span>Acesso Total (Administrador)</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto py-0.5">
+                            {perms.canAccessSC && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-orange-50 text-orange-700 border border-orange-200/80 whitespace-nowrap shrink-0"
+                                title="Acesso ao Painel de Solicitações de Compra"
+                              >
+                                <ShoppingCart className="w-3 h-3 text-orange-500 shrink-0" />
+                                <span>SC</span>
+                              </span>
+                            )}
+                            {perms.canAccessInventario && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-50 text-cyan-700 border border-cyan-200/80 whitespace-nowrap shrink-0"
+                                title="Acesso ao Inventário de TI e Ativos"
+                              >
+                                <Boxes className="w-3 h-3 text-cyan-600 shrink-0" />
+                                <span>TI</span>
+                              </span>
+                            )}
+                            {perms.canAccessAnalytics && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 whitespace-nowrap shrink-0"
+                                title="Acesso a Gráficos e Indicadores"
+                              >
+                                <BarChart2 className="w-3 h-3 text-blue-500 shrink-0" />
+                                <span>Gráficos</span>
+                              </span>
+                            )}
+                            {perms.canReceiveItems && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80 whitespace-nowrap shrink-0"
+                                title="Permissão para registrar Recebimento de Itens no Almoxarifado"
+                              >
+                                <span>Recebimento</span>
+                              </span>
+                            )}
+                            {perms.canDeleteSC && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/80 whitespace-nowrap shrink-0"
+                                title="Permissão para Excluir Solicitações de Compra"
+                              >
+                                <span>Excluir SC</span>
+                              </span>
+                            )}
+                            {perms.canManageEquipments && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-teal-50 text-teal-700 border border-teal-200/80 whitespace-nowrap shrink-0"
+                                title="Permissão para Gerenciar Equipamentos de TI"
+                              >
+                                <span>Ativos TI</span>
+                              </span>
+                            )}
+                            {!perms.canAccessSC && !perms.canAccessInventario && !perms.canAccessAnalytics && (
+                              <span className="text-slate-400 text-xs italic whitespace-nowrap">
+                                Sem permissões ativas
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Password Status */}
+                      <td className="py-3 px-4 whitespace-nowrap align-middle">
+                        {hasPassword ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                            <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Com Senha</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                            <Unlock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Sem Senha</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right whitespace-nowrap align-middle">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordModalUser(user);
+                              setNewPassword(user.password || '');
+                            }}
+                            title="Definir Senha de Acesso"
+                            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(user)}
+                            title="Editar Cargo, Dados e Permissões"
+                            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {!isMe && (
+                            <button
+                              type="button"
+                              onClick={() => setUserToDelete(user)}
+                              title="Excluir Usuário"
+                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 truncate">{user.email}</p>
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-                    <span
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-md border shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
-                    >
-                      {getRoleLabel(user.role)}
-                    </span>
-                  </div>
-
-                  {/* Access Modules Allowed */}
-                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                      Módulos:
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                        user.canAccessSC !== false
-                          ? 'bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400'
-                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through'
-                      }`}
-                    >
-                      Painel SC
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                        user.canAccessInventario !== false
-                          ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400'
-                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 line-through'
-                      }`}
-                    >
-                      Inventário TI
-                    </span>
-                  </div>
-
-                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-2">
-                    <span className="truncate">{user.departamento || 'Geral'}</span>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      {hasPassword ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]">
-                          <Lock className="w-3 h-3" />
-                          Com Senha
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium text-[10px]">
-                          <Unlock className="w-3 h-3" />
-                          Sem Senha
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPasswordModalUser(user);
-                      setNewPassword(user.password || '');
-                    }}
-                    title="Definir ou Alterar Senha"
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <KeyRound className="w-3.5 h-3.5 text-orange-500" />
-                    <span>{hasPassword ? 'Alterar Senha' : 'Criar Senha'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(user)}
-                    title="Editar Perfil"
-                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-
-                  {user.id !== 'usr-admin' && (
-                    <button
-                      type="button"
-                      onClick={() => setUserToDelete(user)}
-                      title="Excluir Usuário"
-                      className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        {/* Footer info */}
+        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
+          <span>{filteredUsers.length} colaborador{filteredUsers.length !== 1 ? 'es' : ''} listado{filteredUsers.length !== 1 ? 's' : ''}</span>
+          <span>Sincronização em tempo real com Firestore</span>
         </div>
       </div>
 
-      {/* Modal: Add User */}
-      <AnimatePresence>
-        {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-white dark:bg-[#181e2b] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
-            >
-              <div className="p-5 bg-linear-to-r from-orange-500/10 to-transparent border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-orange-600 text-white">
-                    <UserPlus className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Cadastrar Novo Usuário na Equipe
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+      {/* Datalist com sugestões rápidas de cargo */}
+      <datalist id="cargo-suggestions">
+        {cargoSuggestions.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
 
-              <form onSubmit={handleSaveAdd} className="p-6 space-y-4">
+      {/* Modal: Add User */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden my-6">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Novo Colaborador</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Cadastre o usuário e configure suas respectivas permissões no sistema</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-md hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAdd} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     Nome Completo *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Ex: João da Silva"
+                    placeholder="Ex: Carlos Eduardo Silva"
                     value={formData.nome}
                     onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      E-mail Institucional *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="joao@mcm.com.br"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Papel / Nível de Acesso *
-                    </label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => {
-                        const newRole = e.target.value as UserRole;
-                        let defaultDept = 'Operacional & Suprimentos';
-                        if (newRole === 'usuario') defaultDept = 'Operacional & Obras';
-                        if (newRole === 'comprador') defaultDept = 'Suprimentos & Compras';
-                        if (newRole === 'almoxarifado') defaultDept = 'Almoxarifado & Logística';
-                        if (newRole === 'gestor') defaultDept = 'Diretoria & Gestão';
-                        if (newRole === 'admin') defaultDept = 'Administração Geral';
-                        setFormData({ ...formData, role: newRole, departamento: defaultDept });
-                      }}
-                      className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-orange-600 dark:text-orange-400"
-                    >
-                      <option value="usuario">Usuário Comum (Criação & Acompanhamento de SCs)</option>
-                      <option value="comprador">Comprador (Criação & Edição de SCs)</option>
-                      <option value="almoxarifado">Almoxarifado (Recebimento & TI)</option>
-                      <option value="gestor">Gestor / Diretoria (Dashboards & Relatórios)</option>
-                      <option value="admin">Administrador Geral (Acesso Total)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Departamento / Setor
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Suprimentos Obra SP"
-                      value={formData.departamento}
-                      onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                      <span>Senha de Acesso</span>
-                      <span className="text-[10px] text-slate-400 font-normal">Opcional</span>
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Deixe em branco para sem senha"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
-                    />
-                  </div>
-                </div>
-
-                {/* Module Permissions Checkboxes */}
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#131722] border border-slate-200 dark:border-slate-800 space-y-2">
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Acessos Liberados pelo Administrador
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-[#181e2b] border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-orange-500/50 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={formData.canAccessSC}
-                        onChange={(e) => setFormData({ ...formData, canAccessSC: e.target.checked })}
-                        className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500"
-                      />
-                      <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">Painel de SC</span>
-                        <span className="text-[10px] text-slate-400">Solicitações & Compras</span>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-[#181e2b] border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-500/50 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={formData.canAccessInventario}
-                        onChange={(e) => setFormData({ ...formData, canAccessInventario: e.target.checked })}
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">Inventários</span>
-                        <span className="text-[10px] text-slate-400">Ativos TI & Almoxarifado</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Avatar Color Picker */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    E-mail de Login *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="carlos@mcm.com.br"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Cargo / Função na Empresa
+                  </label>
+                  <input
+                    type="text"
+                    list="cargo-suggestions"
+                    placeholder="Ex: Comprador Sênior, Almoxarife, Analista de TI..."
+                    value={formData.cargo}
+                    onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Departamento / Setor
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Suprimentos, Logística, TI, Obras..."
+                    value={formData.departamento}
+                    onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Senha Inicial de Acesso (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Sem senha se vazio"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     Cor do Avatar
                   </label>
                   <div className="flex items-center gap-2">
@@ -579,71 +908,63 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                         key={c.class}
                         type="button"
                         onClick={() => setFormData({ ...formData, avatarColor: c.class })}
-                        className={`w-7 h-7 rounded-lg ${c.class} text-white flex items-center justify-center transition-all ${
-                          formData.avatarColor === c.class
-                            ? 'ring-2 ring-offset-2 ring-orange-500 scale-110'
-                            : 'opacity-70 hover:opacity-100'
+                        className={`w-6 h-6 rounded-md ${c.class} text-white flex items-center justify-center cursor-pointer transition-transform ${
+                          formData.avatarColor === c.class ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'opacity-80'
                         }`}
                       >
-                        {formData.avatarColor === c.class && <Check className="w-3.5 h-3.5" />}
+                        {formData.avatarColor === c.class && <Check className="w-3 h-3" />}
                       </button>
                     ))}
                   </div>
                 </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddModalOpen(false)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-xl shadow-md shadow-orange-600/20"
-                  >
-                    {isSubmitting ? 'Salvando...' : 'Cadastrar Usuário'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Edit User */}
-      <AnimatePresence>
-        {editingUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-white dark:bg-[#181e2b] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
-            >
-              <div className="p-5 bg-linear-to-r from-orange-500/10 to-transparent border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-orange-600 text-white">
-                    <Edit2 className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Editar Usuário: {editingUser.nome}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
-              <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
+              {/* Bloco de Permissões Granulares */}
+              {renderPermissionsConfig()}
+
+              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-md cursor-pointer disabled:opacity-50 shadow-2xs"
+                >
+                  {isSubmitting ? 'Salvando...' : 'Cadastrar Usuário'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit User */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden my-6">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Editar Usuário & Permissões</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Ajuste os dados e permissões individuais de {editingUser.nome}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-md hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     Nome Completo *
                   </label>
                   <input
@@ -651,252 +972,183 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                     required
                     value={formData.nome}
                     onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      E-mail Institucional *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    E-mail de Login *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  />
+                </div>
+              </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Papel / Nível de Acesso *
-                    </label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                      className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-orange-600 dark:text-orange-400"
-                    >
-                      <option value="usuario">Usuário Comum (Criação & Acompanhamento de SCs)</option>
-                      <option value="comprador">Comprador (Criação & Edição de SCs)</option>
-                      <option value="almoxarifado">Almoxarifado (Recebimento & TI)</option>
-                      <option value="gestor">Gestor / Diretoria (Dashboards & Relatórios)</option>
-                      <option value="admin">Administrador Geral (Acesso Total)</option>
-                    </select>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Cargo / Função na Empresa
+                  </label>
+                  <input
+                    type="text"
+                    list="cargo-suggestions"
+                    placeholder="Ex: Comprador, Almoxarife, Analista de TI..."
+                    value={formData.cargo}
+                    onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     Departamento / Setor
                   </label>
                   <input
                     type="text"
                     value={formData.departamento}
                     onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
-                    className="w-full px-3.5 py-2 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                   />
-                </div>
-
-                {/* Module Permissions Checkboxes */}
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#131722] border border-slate-200 dark:border-slate-800 space-y-2">
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Acessos Liberados pelo Administrador
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-[#181e2b] border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-orange-500/50 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={formData.canAccessSC}
-                        onChange={(e) => setFormData({ ...formData, canAccessSC: e.target.checked })}
-                        className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500"
-                      />
-                      <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">Painel de SC</span>
-                        <span className="text-[10px] text-slate-400">Solicitações & Compras</span>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-[#181e2b] border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-500/50 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={formData.canAccessInventario}
-                        onChange={(e) => setFormData({ ...formData, canAccessInventario: e.target.checked })}
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white block">Inventários</span>
-                        <span className="text-[10px] text-slate-400">Ativos TI & Almoxarifado</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Avatar Color Picker */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Cor do Avatar
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {colors.map((c) => (
-                      <button
-                        key={c.class}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, avatarColor: c.class })}
-                        className={`w-7 h-7 rounded-lg ${c.class} text-white flex items-center justify-center transition-all ${
-                          formData.avatarColor === c.class
-                            ? 'ring-2 ring-offset-2 ring-orange-500 scale-110'
-                            : 'opacity-70 hover:opacity-100'
-                        }`}
-                      >
-                        {formData.avatarColor === c.class && <Check className="w-3.5 h-3.5" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingUser(null)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-xl shadow-md shadow-orange-600/20"
-                  >
-                    {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Set/Change Password */}
-      <AnimatePresence>
-        {passwordModalUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white dark:bg-[#181e2b] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
-            >
-              <div className="p-5 bg-linear-to-r from-orange-500/10 to-transparent border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-orange-600 text-white">
-                    <KeyRound className="w-4 h-4" />
-                  </span>
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 dark:text-white">
-                      Configurar Senha de Acesso
-                    </h3>
-                    <p className="text-xs text-slate-400">Usuário: {passwordModalUser.nome}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPasswordModalUser(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSavePassword} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Nova Senha de Acesso
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Digite a nova senha (ou deixe em branco para remover)"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-[#131722] border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    {passwordModalUser.role === 'admin'
-                      ? 'Recomendamos manter uma senha segura para o perfil de Administrador.'
-                      : 'Deixar em branco permitirá que o usuário acesse o perfil sem solicitar senha.'}
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPasswordModalUser(null)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-xl shadow-md shadow-orange-600/20"
-                  >
-                    {isSubmitting ? 'Salvando...' : 'Salvar Senha'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Confirmation Modal: Delete User */}
-      <AnimatePresence>
-        {userToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white dark:bg-[#181e2b] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4"
-            >
-              <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
-                <span className="p-2.5 rounded-xl bg-rose-500/10">
-                  <AlertCircle className="w-6 h-6" />
-                </span>
-                <div>
-                  <h4 className="font-black text-base text-slate-900 dark:text-white">
-                    Excluir Usuário?
-                  </h4>
-                  <p className="text-xs text-slate-500">Esta ação não pode ser desfeita.</p>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                Tem certeza que deseja remover o usuário <strong>{userToDelete.nome}</strong> (
-                {userToDelete.email}) da equipe?
-              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Cor do Avatar
+                </label>
+                <div className="flex items-center gap-2">
+                  {colors.map((c) => (
+                    <button
+                      key={c.class}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, avatarColor: c.class })}
+                      className={`w-6 h-6 rounded-md ${c.class} text-white flex items-center justify-center cursor-pointer transition-transform ${
+                        formData.avatarColor === c.class ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'opacity-80'
+                      }`}
+                    >
+                      {formData.avatarColor === c.class && <Check className="w-3 h-3" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2">
+              {/* Bloco de Permissões Granulares */}
+              {renderPermissionsConfig()}
+
+              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setUserToDelete(null)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                  onClick={() => setEditingUser(null)}
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
-                  type="button"
-                  onClick={handleDeleteUser}
-                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl"
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-md cursor-pointer disabled:opacity-50 shadow-2xs"
                 >
-                  Confirmar Exclusão
+                  {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
-            </motion.div>
+            </form>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* Modal: Set/Change Password */}
+      {passwordModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="w-full max-w-sm bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Senha: {passwordModalUser.nome}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPasswordModalUser(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-md hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePassword} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Nova Senha de Acesso
+                </label>
+                <input
+                  type="text"
+                  placeholder="Deixe em branco para remover a senha"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                />
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  Caso permaneça vazia, o colaborador poderá alternar para seu perfil sem exigência de senha.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalUser(null)}
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-md cursor-pointer disabled:opacity-50 shadow-2xs"
+                >
+                  {isSubmitting ? 'Salvando...' : 'Salvar Senha'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete User Confirmation */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="w-full max-w-sm bg-white rounded-xl shadow-xl border border-slate-200 p-5 space-y-4">
+            <div className="flex items-center gap-2.5 text-red-600">
+              <AlertCircle className="w-5 h-5" />
+              <h4 className="font-semibold text-sm text-slate-900">Excluir Colaborador</h4>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Tem certeza que deseja remover o usuário <strong>{userToDelete.nome}</strong> ({userToDelete.email})?
+            </p>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUser}
+                className="px-4 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md cursor-pointer shadow-2xs"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

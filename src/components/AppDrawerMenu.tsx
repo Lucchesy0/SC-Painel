@@ -23,7 +23,7 @@ import {
 import { ActiveNavTab, ThemeMode, UserProfile } from '../types';
 import { MCMLogo } from './MCMLogo';
 import { triggerHaptic } from '../utils/haptics';
-import { getRoleLabel } from '../services/authService';
+import { getUserCargo, getUserPermissions } from '../services/authService';
 
 interface AppDrawerMenuProps {
   isOpen: boolean;
@@ -109,6 +109,9 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
     onClose();
   };
 
+  const perms = getUserPermissions(currentUser);
+  const userCargo = getUserCargo(currentUser);
+
   const navItems = [
     {
       id: 'solicitacoes' as ActiveNavTab,
@@ -143,14 +146,10 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
       badgeType: 'neutral',
     },
   ].filter((item) => {
-    if (currentUser?.role === 'admin') return true;
-    if (!currentUser) return true;
-    if (item.module === 'sc' && currentUser.canAccessSC === false) return false;
-    if (item.module === 'inventario' && currentUser.canAccessInventario === false) return false;
+    if (item.module === 'sc' && !perms.canAccessSC) return false;
+    if (item.module === 'inventario' && !perms.canAccessInventario) return false;
     return true;
   });
-
-  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <AnimatePresence>
@@ -205,7 +204,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         {currentUser.nome}
                       </span>
                       <span className="text-[11px] text-slate-500 font-medium block leading-none">
-                        {getRoleLabel(currentUser.role)}
+                        {userCargo}
                       </span>
                     </div>
                   </div>
@@ -283,7 +282,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                   Ações Rápidas
                 </span>
                 <div className="space-y-0.5">
-                  {onOpenAddSC && (
+                  {onOpenAddSC && perms.canCreateSC && (
                     <button
                       onClick={() => {
                         triggerHaptic('medium');
@@ -297,7 +296,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     </button>
                   )}
 
-                  {onOpenAddEquipment && (
+                  {onOpenAddEquipment && perms.canManageEquipments && (
                     <button
                       onClick={() => {
                         triggerHaptic('medium');
@@ -329,8 +328,10 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     <button
                       onClick={() => {
                         triggerHaptic('light');
-                        onOpenGlobalSearch();
                         onClose();
+                        setTimeout(() => {
+                          onOpenGlobalSearch();
+                        }, 120);
                       }}
                       className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
                     >
@@ -338,7 +339,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         <Search className="w-4 h-4 text-slate-500" />
                         <span>Buscar no Sistema</span>
                       </div>
-                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                      <span className="hidden md:inline-block text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                         Ctrl+K
                       </span>
                     </button>
@@ -417,7 +418,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     </button>
                   )}
 
-                  {onOpenSettings && (
+                  {perms.canAccessAdmin && onOpenSettings && (
                     <button
                       onClick={() => {
                         triggerHaptic('light');
@@ -430,7 +431,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         <SettingsIcon className="w-4 h-4 text-slate-500" />
                         <span>Configurações</span>
                       </div>
-                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                      <span className="hidden md:inline-block text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                         Ctrl+,
                       </span>
                     </button>
@@ -443,7 +444,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                         onOpenShortcuts();
                         onClose();
                       }}
-                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
+                      className="hidden md:flex w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer items-center justify-between"
                     >
                       <div className="flex items-center gap-2.5">
                         <Keyboard className="w-4 h-4 text-slate-500" />
@@ -455,34 +456,32 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     </button>
                   )}
 
-                  {isAdmin && (
-                    <>
-                      {onOpenAdminUsers && (
-                        <button
-                          onClick={() => {
-                            triggerHaptic('light');
-                            onOpenAdminUsers();
-                            onClose();
-                          }}
-                          className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
-                        >
-                          <Users className="w-4 h-4 text-slate-500" />
-                          <span>Usuários & Permissões</span>
-                        </button>
-                      )}
+                  {perms.canManageUsers && onOpenAdminUsers && (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('light');
+                        onOpenAdminUsers();
+                        onClose();
+                      }}
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
+                    >
+                      <Users className="w-4 h-4 text-slate-500" />
+                      <span>Usuários & Permissões</span>
+                    </button>
+                  )}
 
-                      <button
-                        onClick={() => {
-                          triggerHaptic('light');
-                          onOpenAdmin();
-                          onClose();
-                        }}
-                        className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
-                      >
-                        <Shield className="w-4 h-4 text-slate-500" />
-                        <span>Painel Administrativo</span>
-                      </button>
-                    </>
+                  {perms.canAccessAdmin && (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('light');
+                        onOpenAdmin();
+                        onClose();
+                      }}
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-2.5"
+                    >
+                      <Shield className="w-4 h-4 text-slate-500" />
+                      <span>Painel Administrativo</span>
+                    </button>
                   )}
 
                   {onLogout && (

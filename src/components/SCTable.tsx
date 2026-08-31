@@ -17,6 +17,7 @@ import {
   Sparkles,
   RotateCw,
   Download,
+  Tv,
 } from 'lucide-react';
 import { SC, FilterOptions, GridConfig, RolePermissions, UserProfile } from '../types';
 import { calcDays, isDelayed, formatDateBR } from '../utils/storage';
@@ -41,6 +42,7 @@ interface SCTableProps {
   onOpenImportRM?: () => void;
   onExportCSV?: () => void;
   onOpenAddSC?: () => void;
+  onOpenKioskMode?: () => void;
 }
 
 const DEFAULT_GRID_CONFIG: GridConfig = {
@@ -72,6 +74,7 @@ export const SCTable: React.FC<SCTableProps> = ({
   onOpenImportRM,
   onExportCSV,
   onOpenAddSC,
+  onOpenKioskMode,
 }) => {
   // Hover card state
   const [hoveredSC, setHoveredSC] = useState<SC | null>(null);
@@ -214,17 +217,144 @@ export const SCTable: React.FC<SCTableProps> = ({
 
   return (
     <section className="bg-white dark:bg-[#202634] rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex flex-col overflow-hidden relative max-w-full w-full min-w-0">
-      {/* Streamlined Compact Table Navbar & Toolbar */}
-      <div className="p-2.5 sm:p-4 border-b border-slate-200 dark:border-slate-700/80 flex flex-col gap-2 sm:gap-2.5">
-        {/* Row 1: Segmented Status Filter Tabs + Desktop Actions */}
-        <div className="flex items-center justify-between gap-2 min-w-0">
-          {/* Status Quick Tabs */}
-          <div className="flex-1 overflow-x-auto no-scrollbar touch-scroll min-w-0 py-0.5">
-            <div className="inline-flex p-0.5 rounded-xl bg-slate-100 dark:bg-[#131722] border border-slate-200 dark:border-slate-700/80 text-xs font-semibold whitespace-nowrap min-w-max">
+      {/* Responsive Clean Toolbar */}
+      <div className="p-2.5 sm:p-4 border-b border-slate-200/90 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1a202c]/50 flex flex-col gap-2.5 sm:gap-3">
+        
+        {/* Top Control Bar: Search Input + View Mode + Filter Toggle + Desktop Action Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 w-full min-w-0">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-0">
+            <Search className="w-4 h-4 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              id="buscaSC"
+              value={filters.search}
+              onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
+              placeholder="Buscar por SC, solicitante, item..."
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c3343] text-slate-800 dark:text-slate-100 text-xs py-1.5 pl-8 sm:pl-9 pr-7 sm:pr-8 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 dark:focus:border-orange-400 placeholder-slate-400 shadow-2xs transition-all"
+            />
+            {filters.search && (
+              <button
+                type="button"
+                onClick={() => onFilterChange({ ...filters, search: '' })}
+                title="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* View Mode Toggle (Table / Cards) */}
+          <div className="p-0.5 rounded-xl bg-slate-200/80 dark:bg-[#202532] border border-slate-200 dark:border-slate-700 flex items-center shrink-0 h-9">
+            <button
+              onClick={() => setGridConfig((prev) => ({ ...prev, viewMode: 'table' }))}
+              title="Visualização em Tabela"
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer h-7.5 w-7.5 sm:w-8 flex items-center justify-center ${
+                gridConfig.viewMode === 'table'
+                  ? 'bg-white dark:bg-[#2c3343] text-orange-600 dark:text-orange-400 shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              <TableIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setGridConfig((prev) => ({ ...prev, viewMode: 'cards' }))}
+              title="Visualização em Cards"
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer h-7.5 w-7.5 sm:w-8 flex items-center justify-center ${
+                gridConfig.viewMode === 'cards'
+                  ? 'bg-white dark:bg-[#2c3343] text-orange-600 dark:text-orange-400 shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Filter Drawer Toggle */}
+          <button
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            title="Filtros avançados"
+            className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs ${
+              isFilterOpen || activeFilterCount > 0
+                ? 'bg-orange-500 text-white border-orange-600 font-bold'
+                : 'bg-white dark:bg-[#202532] border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-400 hover:bg-slate-50'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Filtros</span>
+            {activeFilterCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-white text-orange-600 font-bold text-[10px] flex items-center justify-center shadow-xs">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Desktop Only Actions (Columns / Import RM / Export / Nova SC) */}
+          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setIsCustomizerOpen(!isCustomizerOpen)}
+              title="Personalizar Colunas"
+              className={`h-9 px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                isCustomizerOpen
+                  ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/40 font-bold'
+                  : 'bg-white dark:bg-[#202532] border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-400 hover:bg-slate-50'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-orange-500" />
+              <span className="hidden md:inline">Colunas</span>
+            </button>
+
+            {onOpenImportRM && (
+              <button
+                type="button"
+                onClick={onOpenImportRM}
+                id="btnTableImportarRMDesktop"
+                title="Importar dados do RM Totvs / Excel"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-emerald-50/60 hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400 active:scale-95 transition-all cursor-pointer shadow-2xs h-9"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="hidden md:inline">Importar RM</span>
+              </button>
+            )}
+
+            {onExportCSV && (
+              <button
+                type="button"
+                onClick={onExportCSV}
+                id="btnTableExportarCSVDesktop"
+                title="Exportar planilha completa em CSV"
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#282f40] active:scale-95 transition-all cursor-pointer shadow-2xs h-9"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span className="hidden lg:inline">Exportar</span>
+              </button>
+            )}
+
+            {onOpenAddSC && (
+              <button
+                type="button"
+                onClick={onOpenAddSC}
+                id="btnTableAddSCDesktop"
+                title="Criar Nova Solicitação de Compra"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white shadow-xs active:scale-95 transition-all cursor-pointer shrink-0 h-9"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Nova SC</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Second Row: Status Filter Scrollable Tabs + Mobile Action Quick Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
+          {/* Status Quick Tabs Scrollable Strip */}
+          <div className="w-full overflow-x-auto no-scrollbar touch-scroll min-w-0 py-0.5 -mx-1 px-1">
+            <div className="inline-flex p-1 rounded-xl bg-slate-200/70 dark:bg-[#131722] border border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold whitespace-nowrap min-w-max gap-1">
               {[
                 { id: 'todos', label: 'Todas', prazo: 'todos', status: '', count: totalCount, color: 'text-slate-700 dark:text-slate-200' },
                 { id: 'pendentes', label: 'Em Andamento', prazo: 'pendentes', status: 'Em andamento', count: emAndamentoCount, color: 'text-blue-600 dark:text-blue-400' },
-                { id: 'atrasadas', label: 'Atrasadas (>7d)', prazo: 'atrasadas', status: '', count: delayedCount, color: 'text-red-600 dark:text-red-400' },
+                { id: 'atrasadas', label: 'Atrasadas (>7d)', prazo: 'atrasadas', status: '', count: delayedCount, color: 'text-rose-600 dark:text-rose-400' },
                 { id: 'vencendo', label: 'Vencendo', prazo: 'vencendo_breve', status: '', count: vencendoBreveCount, color: 'text-amber-600 dark:text-amber-400' },
                 { id: 'concluidas', label: 'Concluídas', prazo: 'concluidas', status: 'Concluído', count: concluidasCount, color: 'text-emerald-600 dark:text-emerald-400' },
               ].map((tab) => {
@@ -240,24 +370,24 @@ export const SCTable: React.FC<SCTableProps> = ({
                         status: tab.status,
                       })
                     }
-                    className={`relative z-10 px-2.5 sm:px-3 py-1 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1.5 min-h-[28px] sm:min-h-[30px] ${
+                    className={`relative z-10 px-2.5 sm:px-3 py-1 rounded-lg transition-all cursor-pointer text-xs flex items-center gap-1.5 min-h-[28px] sm:min-h-[30px] ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 font-bold'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     <span>{tab.label}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${
+                    <span className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] font-bold ${
                       isActive
                         ? 'bg-orange-500/20 text-orange-700 dark:text-orange-300'
-                        : 'bg-slate-200 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300'
+                        : 'bg-slate-300/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300'
                     }`}>
                       {tab.count}
                     </span>
                     {isActive && (
                       <motion.div
                         layoutId="scTableFilterTab"
-                        className="absolute inset-0 bg-white dark:bg-[#252b3b] rounded-lg shadow-2xs -z-10 border border-slate-200/80 dark:border-slate-600/60"
+                        className="absolute inset-0 bg-white dark:bg-[#252b3b] rounded-lg shadow-xs -z-10 border border-slate-200/80 dark:border-slate-600/60"
                         transition={{ type: 'spring', stiffness: 450, damping: 32 }}
                       />
                     )}
@@ -267,17 +397,16 @@ export const SCTable: React.FC<SCTableProps> = ({
             </div>
           </div>
 
-          {/* Quick Actions (Nova SC, Importar RM, Exportar) */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Mobile-Only Actions Strip (Compact & Clean) */}
+          <div className="flex sm:hidden items-center justify-between gap-1.5 w-full pt-0.5">
             {onOpenAddSC && (
               <button
                 type="button"
                 onClick={onOpenAddSC}
-                id="btnTableAddSC"
-                title="Criar Nova Solicitação de Compra"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl bg-linear-to-r from-orange-600 to-amber-600 text-white shadow-xs hover:from-orange-700 hover:to-amber-700 active:scale-95 transition-all cursor-pointer shrink-0 min-h-[30px]"
+                id="btnTableAddSCMobile"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-orange-600 active:bg-orange-700 text-white shadow-xs cursor-pointer h-8.5"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
                 <span>Nova SC</span>
               </button>
             )}
@@ -286,64 +415,12 @@ export const SCTable: React.FC<SCTableProps> = ({
               <button
                 type="button"
                 onClick={onOpenImportRM}
-                id="btnTableImportarRM"
-                title="Importar dados do RM Totvs / Excel"
-                className="hidden md:inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-600 dark:hover:text-orange-400 active:scale-95 transition-all cursor-pointer shadow-2xs min-h-[30px]"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>Importar RM</span>
-              </button>
-            )}
-
-            {onExportCSV && (
-              <button
-                type="button"
-                onClick={onExportCSV}
-                id="btnTableExportarCSV"
-                title="Exportar planilha completa em CSV"
-                className="hidden md:inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#282f40] active:scale-95 transition-all cursor-pointer shadow-2xs min-h-[30px]"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                <span>Exportar</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Row 2: Search Bar + View Mode + Filtros + Colunas + Mobile Import/Export */}
-        <div className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0">
-          <div className="relative flex-1 min-w-0">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              id="buscaSC"
-              value={filters.search}
-              onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
-              placeholder="Buscar por número, solicitante, item..."
-              className="w-full h-8.5 sm:h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-[#2c3343] text-slate-800 dark:text-slate-100 text-sm sm:text-xs py-1 pl-9 pr-8 focus:outline-hidden focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 dark:focus:border-orange-400 placeholder-slate-400 min-h-[36px] sm:min-h-[34px] shadow-2xs transition-all"
-            />
-            {filters.search && (
-              <button
-                type="button"
-                onClick={() => onFilterChange({ ...filters, search: '' })}
-                title="Limpar busca"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Mobile-only Import & Export icon buttons */}
-            {onOpenImportRM && (
-              <button
-                type="button"
-                onClick={onOpenImportRM}
+                id="btnTableImportarRMMobile"
                 title="Importar RM Totvs"
-                className="md:hidden h-8.5 w-8.5 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-orange-500/10 hover:text-orange-600 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                className="inline-flex items-center justify-center gap-1 px-2.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-700 dark:text-slate-200 active:bg-slate-100 shadow-2xs cursor-pointer h-8.5"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>RM</span>
               </button>
             )}
 
@@ -351,69 +428,13 @@ export const SCTable: React.FC<SCTableProps> = ({
               <button
                 type="button"
                 onClick={onExportCSV}
+                id="btnTableExportarCSVMobile"
                 title="Exportar CSV"
-                className="md:hidden h-8.5 w-8.5 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#202532] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#282f40] transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                className="inline-flex items-center justify-center p-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-700 dark:text-slate-200 active:bg-slate-100 shadow-2xs cursor-pointer h-8.5 w-8.5"
               >
-                <Download className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
               </button>
             )}
-
-            {/* Quick View Mode Switcher (Table / Cards) */}
-            <div className="p-0.5 rounded-xl bg-slate-100 dark:bg-[#202532] border border-slate-200 dark:border-slate-700 flex items-center shrink-0 h-8.5 sm:h-9">
-              <button
-                onClick={() => setGridConfig((prev) => ({ ...prev, viewMode: 'cards' }))}
-                title="Visualização em Cards (Ideal para Celular)"
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer h-7 w-7 sm:h-7.5 sm:w-7.5 flex items-center justify-center ${
-                  gridConfig.viewMode === 'cards'
-                    ? 'bg-white dark:bg-[#2c3343] text-orange-600 dark:text-orange-400 shadow-2xs font-bold'
-                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setGridConfig((prev) => ({ ...prev, viewMode: 'table' }))}
-                title="Visualização em Tabela"
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer h-7 w-7 sm:h-7.5 sm:w-7.5 flex items-center justify-center ${
-                  gridConfig.viewMode === 'table'
-                    ? 'bg-white dark:bg-[#2c3343] text-orange-600 dark:text-orange-400 shadow-2xs font-bold'
-                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                }`}
-              >
-                <TableIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Filter Toggle Button */}
-            <button
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`h-8.5 sm:h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                isFilterOpen || activeFilterCount > 0
-                  ? 'bg-orange-500 text-white border-orange-600'
-                  : 'bg-slate-50 dark:bg-[#202532] border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-400'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Filtros</span>
-              {activeFilterCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-white text-orange-600 dark:bg-slate-900 dark:text-orange-400 font-mono text-[10px] font-black">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            {/* Customize Grid Button */}
-            <button
-              onClick={() => setIsCustomizerOpen(!isCustomizerOpen)}
-              className={`h-8.5 sm:h-9 px-2 sm:px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                isCustomizerOpen
-                  ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/40'
-                  : 'bg-slate-50 dark:bg-[#202532] border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-orange-400'
-              }`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-orange-500" />
-              <span className="hidden lg:inline">Colunas</span>
-            </button>
           </div>
         </div>
 
@@ -655,37 +676,37 @@ export const SCTable: React.FC<SCTableProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-600/40" id="listaSC">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
+                  <td colSpan={8} className="px-4 py-10 sm:py-12 text-center">
                     {scs.length === 0 ? (
-                      <div className="max-w-md mx-auto flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-xs">
-                          <FileSpreadsheet className="w-6 h-6" />
+                      <div className="max-w-md mx-auto flex flex-col items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-2xs">
+                          <FileSpreadsheet className="w-5 h-5" />
                         </div>
                         <div>
-                          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
                             Base de Solicitações Limpa
                           </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Você pode importar sua tabela de dados do RM / Excel ou cadastrar solicitações manualmente.
+                          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Importe sua planilha do RM / Excel ou cadastre solicitações manualmente.
                           </p>
                         </div>
-                        <div className="flex items-center gap-2.5 mt-2">
+                        <div className="flex items-center gap-2 mt-1">
                           {onOpenImportRM && (
                             <button
                               type="button"
                               onClick={onOpenImportRM}
-                              className="px-4 py-2 rounded-xl bg-orange-600 text-white hover:bg-orange-700 font-bold text-xs flex items-center gap-2 shadow-xs cursor-pointer transition-colors"
+                              className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors active:scale-95"
                             >
-                              <FileSpreadsheet className="w-4 h-4" /> Importar Tabela RM
+                              <FileSpreadsheet className="w-3.5 h-3.5" /> Importar RM
                             </button>
                           )}
                           {onOpenAddSC && (
                             <button
                               type="button"
                               onClick={onOpenAddSC}
-                              className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                              className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs active:scale-95"
                             >
-                              <Plus className="w-4 h-4" /> Nova SC
+                              <Plus className="w-3.5 h-3.5" /> Nova SC
                             </button>
                           )}
                         </div>
@@ -719,39 +740,39 @@ export const SCTable: React.FC<SCTableProps> = ({
         </div>
       ) : (
         /* Cards in Grid View Mode */
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[620px] overflow-y-auto min-h-[250px] custom-scrollbar">
+        <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[620px] overflow-y-auto min-h-[200px] custom-scrollbar">
           {filtered.length === 0 ? (
-            <div className="col-span-full py-16 text-center">
+            <div className="col-span-full py-10 sm:py-12 text-center">
               {scs.length === 0 ? (
-                <div className="max-w-md mx-auto flex flex-col items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-xs">
-                    <FileSpreadsheet className="w-6 h-6" />
+                <div className="max-w-md mx-auto flex flex-col items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-2xs">
+                    <FileSpreadsheet className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
                       Base de Solicitações Limpa
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Você pode importar sua tabela de dados do RM / Excel ou cadastrar solicitações manualmente.
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Importe sua planilha do RM / Excel ou cadastre solicitações manualmente.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2.5 mt-2">
+                  <div className="flex items-center gap-2 mt-1">
                     {onOpenImportRM && (
                       <button
                         type="button"
                         onClick={onOpenImportRM}
-                        className="px-4 py-2 rounded-xl bg-orange-600 text-white hover:bg-orange-700 font-bold text-xs flex items-center gap-2 shadow-xs cursor-pointer transition-colors"
+                        className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors active:scale-95"
                       >
-                        <FileSpreadsheet className="w-4 h-4" /> Importar Tabela RM
+                        <FileSpreadsheet className="w-3.5 h-3.5" /> Importar RM
                       </button>
                     )}
                     {onOpenAddSC && (
                       <button
                         type="button"
                         onClick={onOpenAddSC}
-                        className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                        className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs active:scale-95"
                       >
-                        <Plus className="w-4 h-4" /> Nova SC
+                        <Plus className="w-3.5 h-3.5" /> Nova SC
                       </button>
                     )}
                   </div>

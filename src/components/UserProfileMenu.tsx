@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, CloudSyncStatus } from '../types';
-import { getRoleLabel } from '../services/authService';
+import { getUserCargo, getUserPermissions } from '../services/authService';
 import { triggerHaptic } from '../utils/haptics';
 
 interface UserProfileMenuProps {
@@ -50,7 +50,8 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isAdmin = currentUser.role === 'admin';
+  const perms = getUserPermissions(currentUser);
+  const userCargo = getUserCargo(currentUser);
 
   return (
     <div className="relative shrink-0" ref={menuRef}>
@@ -60,10 +61,10 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         id="btnUserProfileTrigger"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Menu do usuário"
-        className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer text-left group"
+        className="flex items-center gap-1.5 sm:gap-2 h-9 sm:h-9.5 px-2 sm:px-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition-colors cursor-pointer text-left group shadow-xs active:scale-95 shrink-0"
       >
         <div
-          className={`w-7 h-7 rounded-md ${
+          className={`w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-lg ${
             currentUser.avatarColor || 'bg-slate-700'
           } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
         >
@@ -84,7 +85,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
             {currentUser.nome}
           </span>
           <span className="text-[10px] text-slate-500 truncate">
-            {isAdmin ? 'Administrador' : getRoleLabel(currentUser.role)}
+            {userCargo}
           </span>
         </div>
 
@@ -103,7 +104,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.98 }}
             transition={{ duration: 0.12 }}
-            className="absolute right-0 mt-1.5 w-64 rounded-xl bg-white border border-slate-200 shadow-lg z-50 overflow-hidden font-sans"
+            className="absolute right-0 mt-1.5 w-64 max-w-[calc(100vw-1.5rem)] rounded-xl bg-white border border-slate-200 shadow-lg z-50 overflow-hidden font-sans"
           >
             {/* Header Info */}
             <div className="p-3 border-b border-slate-100 bg-slate-50/50">
@@ -129,7 +130,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
               <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-1.5">
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200/70 text-slate-700">
-                    {getRoleLabel(currentUser.role)}
+                    {userCargo}
                   </span>
                   {currentUser.departamento && (
                     <span className="text-[10px] text-slate-400 truncate max-w-[90px]">
@@ -176,7 +177,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                 </button>
               )}
 
-              {onOpenSettings && (
+              {perms.canAccessAdmin && onOpenSettings && (
                 <button
                   type="button"
                   id="btnMenuSettings"
@@ -192,40 +193,36 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                 </button>
               )}
 
-              {isAdmin && (
-                <>
-                  {onOpenAdminOverview && (
-                    <button
-                      type="button"
-                      id="btnMenuAdminOverview"
-                      onClick={() => {
-                        triggerHaptic('light');
-                        setIsOpen(false);
-                        onOpenAdminOverview();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
-                    >
-                      <Shield className="w-4 h-4 text-slate-500" />
-                      <span>Painel Administrativo</span>
-                    </button>
-                  )}
+              {perms.canAccessAdmin && onOpenAdminOverview && (
+                <button
+                  type="button"
+                  id="btnMenuAdminOverview"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setIsOpen(false);
+                    onOpenAdminOverview();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
+                >
+                  <Shield className="w-4 h-4 text-slate-500" />
+                  <span>Painel Administrativo</span>
+                </button>
+              )}
 
-                  {onOpenAdminUsers && (
-                    <button
-                      type="button"
-                      id="btnMenuAdminUsers"
-                      onClick={() => {
-                        triggerHaptic('light');
-                        setIsOpen(false);
-                        onOpenAdminUsers();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
-                    >
-                      <Users className="w-4 h-4 text-slate-500" />
-                      <span>Usuários e Permissões</span>
-                    </button>
-                  )}
-                </>
+              {perms.canManageUsers && onOpenAdminUsers && (
+                <button
+                  type="button"
+                  id="btnMenuAdminUsers"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setIsOpen(false);
+                    onOpenAdminUsers();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer text-left"
+                >
+                  <Users className="w-4 h-4 text-slate-500" />
+                  <span>Usuários e Permissões</span>
+                </button>
               )}
             </div>
 

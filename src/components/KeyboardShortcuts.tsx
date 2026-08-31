@@ -25,8 +25,8 @@ export const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
 
   return (
     <>
-      {/* Footer bar with shortcut hints */}
-      <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-[#202532]/80 backdrop-blur-md py-3 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 dark:text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-3 transition-colors">
+      {/* Footer bar with shortcut hints (visible only on desktop / notebook devices) */}
+      <footer className="hidden md:flex mt-8 border-t border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-[#202532]/80 backdrop-blur-md py-3 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 dark:text-slate-400 items-center justify-between gap-3 transition-colors">
         <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
           <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mr-1">
             <Keyboard className="w-4 h-4 text-orange-500" /> Atalhos rápidos:

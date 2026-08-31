@@ -2,31 +2,57 @@ export type SCStatus = 'Em andamento' | 'Concluído';
 
 export type ItemStatus = 'Pendente' | 'Parcial' | 'Entregue';
 
-export type UserRole = 'admin' | 'usuario' | 'comprador' | 'almoxarifado' | 'gestor';
+export type UserRole = string;
+
+export interface UserPermissions {
+  // Acesso aos Módulos Principais
+  canAccessSC: boolean;          // Acesso ao Painel de Solicitações de Compra
+  canAccessInventario: boolean;  // Acesso ao Painel de Inventário de TI / Ativos
+  canAccessAnalytics: boolean;   // Acesso aos Indicadores & Relatórios Gráficos
+  canAccessAdmin: boolean;       // Acesso ao Painel Administrativo / Backups / Manutenção
+  canManageUsers: boolean;       // Acesso à Gestão de Usuários e Permissões
+
+  // Ações em Solicitações de Compra (SC)
+  canCreateSC: boolean;          // Criar novas Solicitações
+  canEditSC: boolean;            // Editar Solicitações existentes
+  canDeleteSC: boolean;          // Excluir Solicitações
+  canReceiveItems: boolean;      // Registrar recebimento de itens no almoxarifado
+
+  // Ações de TI / Inventário
+  canManageEquipments: boolean;  // Adicionar, editar ou desativar equipamentos
+
+  // Ações Globais / Relatórios
+  canExportReports: boolean;     // Exportar dados e relatórios (PDF / Excel / CSV)
+  canImportData: boolean;        // Importar dados / planilhas
+}
+
+// Retrocompatibilidade
+export type RolePermissions = UserPermissions;
 
 export interface UserProfile {
   id: string;
   nome: string;
   email: string;
-  role: UserRole;
+  cargo?: string;               // Cargo / Função personalizada livre (ex: 'Comprador', 'Analista de TI', 'Diretor')
+  role?: string;                // Mantido para compatibilidade ('admin' | 'kiosk' | string)
   departamento: string;
   avatarColor?: string;
-  password?: string; // Senha de acesso criptografada ou definida pelo Admin
+  password?: string;            // Senha de acesso definida pelo Admin
   requiresPassword?: boolean;
-  canAccessSC?: boolean; // Permissão: Acesso ao Painel de SC (Padrão: true)
-  canAccessInventario?: boolean; // Permissão: Acesso ao Painel de Inventários (Padrão: true)
+  isKiosk?: boolean;            // Identifica perfil de Quiosque / Painel TV
+  
+  // Permissões diretas e granulares do usuário
+  permissions?: Partial<UserPermissions>;
+
+  // Atalhos de acesso rápido para retrocompatibilidade direta
+  canAccessSC?: boolean;
+  canAccessInventario?: boolean;
+  canAccessAnalytics?: boolean;
+  canAccessAdmin?: boolean;
+  canManageUsers?: boolean;
+
   isBuiltIn?: boolean;
   createdAt?: string;
-}
-
-export interface RolePermissions {
-  canCreateSC: boolean;
-  canEditSC: boolean;
-  canDeleteSC: boolean;
-  canReceiveItems: boolean;
-  canManageEquipments: boolean;
-  canAccessSettings: boolean;
-  canExportReports: boolean;
 }
 
 export type CloudSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';

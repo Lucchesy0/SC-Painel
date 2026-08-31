@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ArrowRight, Tv } from 'lucide-react';
 import { UserProfile } from '../types';
-import { authService } from '../services/authService';
+import { authService, INITIAL_KIOSK_USER } from '../services/authService';
 
 interface LoginScreenProps {
   users?: UserProfile[];
@@ -38,6 +38,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleQuickKioskLogin = () => {
+    authService.setAuthenticatedUser(INITIAL_KIOSK_USER);
+    onLoginSuccess(INITIAL_KIOSK_USER);
   };
 
   return (
@@ -139,6 +144,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               )}
             </button>
           </form>
+
+          {/* Quick Dedicated Kiosk Mode Login Access */}
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80">
+            <button
+              type="button"
+              onClick={handleQuickKioskLogin}
+              id="btnQuickKioskLogin"
+              className="w-full py-2.5 px-3 rounded-xl border border-orange-300 dark:border-orange-500/30 bg-orange-50/70 hover:bg-orange-100/80 dark:bg-orange-950/30 dark:hover:bg-orange-900/40 text-orange-800 dark:text-orange-300 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs group"
+            >
+              <Tv className="w-4 h-4 text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform" />
+              <span>Entrar como Usuário Quiosque / Painel TV</span>
+            </button>
+          </div>
         </div>
       </div>
 

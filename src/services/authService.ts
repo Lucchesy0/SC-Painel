@@ -1,4 +1,4 @@
-import { UserProfile, UserRole, RolePermissions } from '../types';
+import { UserProfile, UserRole, UserPermissions, RolePermissions } from '../types';
 import {
   fetchAllUsersFromFirestore,
   saveUserToFirestore,
@@ -7,117 +7,205 @@ import {
   subscribeToFirestoreUsers,
 } from './firebase';
 
+export const DEFAULT_USER_PERMISSIONS: UserPermissions = {
+  canAccessSC: true,
+  canAccessInventario: true,
+  canAccessAnalytics: true,
+  canAccessAdmin: false,
+  canManageUsers: false,
+  canCreateSC: true,
+  canEditSC: true,
+  canDeleteSC: false,
+  canReceiveItems: true,
+  canManageEquipments: false,
+  canExportReports: true,
+  canImportData: false,
+};
+
+export const ADMIN_USER_PERMISSIONS: UserPermissions = {
+  canAccessSC: true,
+  canAccessInventario: true,
+  canAccessAnalytics: true,
+  canAccessAdmin: true,
+  canManageUsers: true,
+  canCreateSC: true,
+  canEditSC: true,
+  canDeleteSC: true,
+  canReceiveItems: true,
+  canManageEquipments: true,
+  canExportReports: true,
+  canImportData: true,
+};
+
 export const INITIAL_ADMIN_USER: UserProfile = {
   id: 'usr-admin',
   nome: 'Luchesy (Admin)',
   email: 'luchesyn@mcm.com.br',
+  cargo: 'Administrador Geral',
   role: 'admin',
   departamento: 'Diretoria & Administração Geral',
   avatarColor: 'bg-indigo-600',
   password: '104145', // Senha solicitada pelo usuário Luchesy
   requiresPassword: true,
+  permissions: ADMIN_USER_PERMISSIONS,
   canAccessSC: true,
   canAccessInventario: true,
+  canAccessAnalytics: true,
+  canAccessAdmin: true,
+  canManageUsers: true,
   isBuiltIn: true,
   createdAt: '2026-01-01',
 };
 
-export const DEFAULT_USERS: UserProfile[] = [INITIAL_ADMIN_USER];
+export const INITIAL_KIOSK_USER: UserProfile = {
+  id: 'usr-quiosque',
+  nome: 'Painel Quiosque (TV)',
+  email: 'quiosque@mcm.com.br',
+  cargo: 'Monitoramento Quiosque / TV',
+  role: 'kiosk',
+  isKiosk: true,
+  departamento: 'Compras / Almoxarifado / Painel TV',
+  avatarColor: 'bg-orange-600',
+  password: '', // Acesso direto sem senha obrigatória
+  requiresPassword: false,
+  permissions: {
+    canAccessSC: true,
+    canAccessInventario: false,
+    canAccessAnalytics: false,
+    canAccessAdmin: false,
+    canManageUsers: false,
+    canCreateSC: false,
+    canEditSC: false,
+    canDeleteSC: false,
+    canReceiveItems: false,
+    canManageEquipments: false,
+    canExportReports: false,
+    canImportData: false,
+  },
+  canAccessSC: true,
+  canAccessInventario: false,
+  canAccessAnalytics: false,
+  canAccessAdmin: false,
+  canManageUsers: false,
+  isBuiltIn: true,
+  createdAt: '2026-01-01',
+};
 
-export function getRolePermissions(role: UserRole): RolePermissions {
-  switch (role) {
-    case 'admin':
-      return {
-        canCreateSC: true,
-        canEditSC: true,
-        canDeleteSC: true,
-        canReceiveItems: true,
-        canManageEquipments: true,
-        canAccessSettings: true,
-        canExportReports: true,
-      };
-    case 'usuario':
-    case 'comprador':
-    case 'almoxarifado':
-    case 'gestor':
-      return {
-        canCreateSC: true, // Usuários comuns podem criar e adicionar SCs
-        canEditSC: true,
-        canDeleteSC: false,
-        canReceiveItems: true,
-        canManageEquipments: role === 'almoxarifado',
-        canAccessSettings: false, // Apenas o Administrador acessa configurações e gestão de usuários
-        canExportReports: true,
-      };
-    default:
-      return {
-        canCreateSC: true,
-        canEditSC: true,
-        canDeleteSC: false,
-        canReceiveItems: false,
-        canManageEquipments: false,
-        canAccessSettings: false,
-        canExportReports: true,
-      };
-  }
+export const DEFAULT_USERS: UserProfile[] = [INITIAL_ADMIN_USER, INITIAL_KIOSK_USER];
+
+/**
+ * Retorna as permissões efetivas do usuário de forma individualizada e granular
+ */
+export function getUserPermissions(user?: UserProfile | null): UserPermissions {
+  if (!user) return DEFAULT_USER_PERMISSIONS;
+
+  const isBuiltinAdmin = user.id === 'usr-admin' || user.role === 'admin';
+  const base = isBuiltinAdmin ? ADMIN_USER_PERMISSIONS : DEFAULT_USER_PERMISSIONS;
+  const p = user.permissions || {};
+
+  return {
+    canAccessSC: p.canAccessSC ?? user.canAccessSC ?? base.canAccessSC,
+    canAccessInventario: p.canAccessInventario ?? user.canAccessInventario ?? base.canAccessInventario,
+    canAccessAnalytics: p.canAccessAnalytics ?? user.canAccessAnalytics ?? base.canAccessAnalytics,
+    canAccessAdmin: p.canAccessAdmin ?? user.canAccessAdmin ?? (isBuiltinAdmin ? true : base.canAccessAdmin),
+    canManageUsers: p.canManageUsers ?? user.canManageUsers ?? (isBuiltinAdmin ? true : base.canManageUsers),
+    canCreateSC: p.canCreateSC ?? base.canCreateSC,
+    canEditSC: p.canEditSC ?? base.canEditSC,
+    canDeleteSC: p.canDeleteSC ?? base.canDeleteSC,
+    canReceiveItems: p.canReceiveItems ?? base.canReceiveItems,
+    canManageEquipments: p.canManageEquipments ?? base.canManageEquipments,
+    canExportReports: p.canExportReports ?? base.canExportReports,
+    canImportData: p.canImportData ?? base.canImportData,
+  };
 }
 
-export function getRoleLabel(role: UserRole): string {
-  switch (role) {
+/**
+ * Retorna o título descritivo do Cargo / Função do usuário
+ */
+export function getUserCargo(user?: UserProfile | null): string {
+  if (!user) return 'Colaborador';
+  if (user.cargo && user.cargo.trim().length > 0) return user.cargo.trim();
+  if (user.role === 'admin' || user.id === 'usr-admin') return 'Administrador Geral';
+  if (user.role) return getRoleLabel(user.role);
+  return 'Colaborador';
+}
+
+/**
+ * Compatibilidade legada para obter permissões
+ */
+export function getRolePermissions(roleOrUser: UserRole | UserProfile): RolePermissions {
+  if (typeof roleOrUser === 'object' && roleOrUser !== null) {
+    return getUserPermissions(roleOrUser);
+  }
+  if (roleOrUser === 'admin') {
+    return ADMIN_USER_PERMISSIONS;
+  }
+  return DEFAULT_USER_PERMISSIONS;
+}
+
+export function getRoleLabel(role?: string): string {
+  if (!role) return 'Colaborador';
+  switch (role.toLowerCase()) {
     case 'admin':
       return 'Administrador Geral';
+    case 'kiosk':
+    case 'quiosque':
+      return 'Painel Quiosque / TV';
     case 'usuario':
-      return 'Usuário Comum';
+      return 'Colaborador';
     case 'comprador':
-      return 'Comprador (Suprimentos)';
+      return 'Comprador';
     case 'almoxarifado':
-      return 'Almoxarifado (Recebimento)';
+      return 'Almoxarifado';
     case 'gestor':
       return 'Gestor / Diretoria';
     default:
-      return 'Colaborador';
+      return role;
   }
 }
 
-export function getRoleBadgeClass(role: UserRole): { bg: string; text: string; border: string } {
-  switch (role) {
-    case 'admin':
-      return {
-        bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-        text: 'text-indigo-600 dark:text-indigo-400',
-        border: 'border-indigo-500/30',
-      };
-    case 'usuario':
-      return {
-        bg: 'bg-blue-500/10 dark:bg-blue-500/20',
-        text: 'text-blue-600 dark:text-blue-400',
-        border: 'border-blue-500/30',
-      };
-    case 'comprador':
-      return {
-        bg: 'bg-orange-500/10 dark:bg-orange-500/20',
-        text: 'text-orange-600 dark:text-orange-400',
-        border: 'border-orange-500/30',
-      };
-    case 'almoxarifado':
-      return {
-        bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-        text: 'text-emerald-600 dark:text-emerald-400',
-        border: 'border-emerald-500/30',
-      };
-    case 'gestor':
-      return {
-        bg: 'bg-purple-500/10 dark:bg-purple-500/20',
-        text: 'text-purple-600 dark:text-purple-400',
-        border: 'border-purple-500/30',
-      };
-    default:
-      return {
-        bg: 'bg-slate-500/10 dark:bg-slate-500/20',
-        text: 'text-slate-600 dark:text-slate-400',
-        border: 'border-slate-500/30',
-      };
+export function getRoleBadgeClass(roleOrCargo?: string): { bg: string; text: string; border: string } {
+  const norm = (roleOrCargo || '').toLowerCase();
+  if (norm.includes('kiosk') || norm.includes('quiosque') || norm.includes('painel tv')) {
+    return {
+      bg: 'bg-orange-500/10 dark:bg-orange-500/20',
+      text: 'text-orange-600 dark:text-orange-400',
+      border: 'border-orange-500/30',
+    };
   }
+  if (norm.includes('admin') || norm.includes('diretor') || norm.includes('gerente')) {
+    return {
+      bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+      text: 'text-indigo-600 dark:text-indigo-400',
+      border: 'border-indigo-500/30',
+    };
+  }
+  if (norm.includes('compra') || norm.includes('suprimento')) {
+    return {
+      bg: 'bg-orange-500/10 dark:bg-orange-500/20',
+      text: 'text-orange-600 dark:text-orange-400',
+      border: 'border-orange-500/30',
+    };
+  }
+  if (norm.includes('almoxarif') || norm.includes('estoque') || norm.includes('logístic')) {
+    return {
+      bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+      text: 'text-emerald-600 dark:text-emerald-400',
+      border: 'border-emerald-500/30',
+    };
+  }
+  if (norm.includes('ti') || norm.includes('sistemas') || norm.includes('técnic') || norm.includes('analista')) {
+    return {
+      bg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
+      text: 'text-cyan-700 dark:text-cyan-300',
+      border: 'border-cyan-500/30',
+    };
+  }
+  return {
+    bg: 'bg-slate-500/10 dark:bg-slate-500/20',
+    text: 'text-slate-700 dark:text-slate-300',
+    border: 'border-slate-500/30',
+  };
 }
 
 const STORAGE_KEY_AUTH_USER = 'mcm_authenticated_user_session';
@@ -376,10 +464,12 @@ export const authService = {
   async createUser(userData: {
     nome: string;
     email: string;
-    role: UserRole;
+    cargo?: string;
+    role?: string;
     departamento: string;
     password?: string;
     avatarColor?: string;
+    permissions?: Partial<UserPermissions>;
     canAccessSC?: boolean;
     canAccessInventario?: boolean;
   }): Promise<UserProfile> {
@@ -395,17 +485,33 @@ export const authService = {
     ];
     const chosenColor = userData.avatarColor || colors[Math.floor(Math.random() * colors.length)];
 
+    const cleanCargo = (userData.cargo || userData.role || 'Colaborador').trim();
+    const isSpecialAdmin = cleanCargo.toLowerCase().includes('admin') || userData.role === 'admin';
+    const basePerms = isSpecialAdmin ? ADMIN_USER_PERMISSIONS : DEFAULT_USER_PERMISSIONS;
+
+    const mergedPermissions: UserPermissions = {
+      ...basePerms,
+      ...(userData.permissions || {}),
+    };
+    if (userData.canAccessSC !== undefined) mergedPermissions.canAccessSC = userData.canAccessSC;
+    if (userData.canAccessInventario !== undefined) mergedPermissions.canAccessInventario = userData.canAccessInventario;
+
     const newUser: UserProfile = {
       id,
       nome: userData.nome.trim(),
       email: userData.email.trim().toLowerCase(),
-      role: userData.role,
-      departamento: userData.departamento.trim(),
+      cargo: cleanCargo,
+      role: isSpecialAdmin ? 'admin' : (userData.role || 'usuario'),
+      departamento: (userData.departamento || 'Geral').trim(),
       avatarColor: chosenColor,
       password: userData.password?.trim() || undefined,
       requiresPassword: Boolean(userData.password && userData.password.trim().length > 0),
-      canAccessSC: userData.canAccessSC ?? true,
-      canAccessInventario: userData.canAccessInventario ?? true,
+      permissions: mergedPermissions,
+      canAccessSC: mergedPermissions.canAccessSC,
+      canAccessInventario: mergedPermissions.canAccessInventario,
+      canAccessAnalytics: mergedPermissions.canAccessAnalytics,
+      canAccessAdmin: mergedPermissions.canAccessAdmin,
+      canManageUsers: mergedPermissions.canManageUsers,
       createdAt: new Date().toISOString(),
       isBuiltIn: false,
     };
@@ -422,11 +528,28 @@ export const authService = {
     const existing = users.find((u) => u.id === userId);
     if (!existing) return null;
 
+    const existingPerms = getUserPermissions(existing);
+    const updatedPerms: UserPermissions = {
+      ...existingPerms,
+      ...(updateData.permissions || {}),
+    };
+
+    if (updateData.canAccessSC !== undefined) updatedPerms.canAccessSC = updateData.canAccessSC;
+    if (updateData.canAccessInventario !== undefined) updatedPerms.canAccessInventario = updateData.canAccessInventario;
+    if (updateData.canAccessAnalytics !== undefined) updatedPerms.canAccessAnalytics = updateData.canAccessAnalytics;
+    if (updateData.canAccessAdmin !== undefined) updatedPerms.canAccessAdmin = updateData.canAccessAdmin;
+    if (updateData.canManageUsers !== undefined) updatedPerms.canManageUsers = updateData.canManageUsers;
+
     const updated: UserProfile = {
       ...existing,
       ...updateData,
-      canAccessSC: updateData.canAccessSC !== undefined ? updateData.canAccessSC : (existing.canAccessSC ?? true),
-      canAccessInventario: updateData.canAccessInventario !== undefined ? updateData.canAccessInventario : (existing.canAccessInventario ?? true),
+      cargo: updateData.cargo !== undefined ? updateData.cargo : existing.cargo,
+      permissions: updatedPerms,
+      canAccessSC: updatedPerms.canAccessSC,
+      canAccessInventario: updatedPerms.canAccessInventario,
+      canAccessAnalytics: updatedPerms.canAccessAnalytics,
+      canAccessAdmin: updatedPerms.canAccessAdmin,
+      canManageUsers: updatedPerms.canManageUsers,
       requiresPassword:
         updateData.password !== undefined
           ? Boolean(updateData.password && updateData.password.trim().length > 0)
@@ -455,8 +578,13 @@ export const authService = {
     return true;
   },
 
-  getPermissions(role?: UserRole): RolePermissions {
-    const r = role || this.getCurrentUser().role;
-    return getRolePermissions(r);
+  getPermissions(userOrRole?: UserProfile | string): RolePermissions {
+    if (typeof userOrRole === 'object' && userOrRole !== null) {
+      return getUserPermissions(userOrRole);
+    }
+    if (typeof userOrRole === 'string') {
+      return getRolePermissions(userOrRole);
+    }
+    return getUserPermissions(this.getCurrentUser());
   },
 };

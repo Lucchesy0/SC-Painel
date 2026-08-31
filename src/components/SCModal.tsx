@@ -336,7 +336,7 @@ export const SCModal: React.FC<SCModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-[#202532] w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[95vh] overflow-hidden transform transition-all">
+      <div className="relative flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#202634]">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#181d28]">
           <div>
@@ -382,7 +382,7 @@ export const SCModal: React.FC<SCModalProps> = ({
         )}
 
         {/* Form Body */}
-        <form id="form-sc" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-4">
+        <form id="form-sc" onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 pb-32 flex flex-col gap-4">
           {/* Main Fields: Número da Solicitação, Data, Tipo */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
@@ -811,7 +811,7 @@ export const SCModal: React.FC<SCModalProps> = ({
         </form>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#181d28] flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
+        <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-[#202634] flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
           <button
             type="button"
             onClick={onClose}

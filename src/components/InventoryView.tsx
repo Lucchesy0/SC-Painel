@@ -311,94 +311,95 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       </div>
 
       {/* Control Bar: Search, Filters, View Modes, Add Button */}
-      <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#202532] border border-slate-200 dark:border-slate-700/80 shadow-2xs flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+      <div className="p-2.5 sm:p-3.5 rounded-2xl bg-white dark:bg-[#202532] border border-slate-200 dark:border-slate-700/80 shadow-2xs flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2">
           {/* Search Input */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <div className="relative flex-1 min-w-0">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Buscar por AF, nome, categoria ou localização..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 min-h-[44px]"
+              placeholder="Buscar por AF, nome, categoria..."
+              className="w-full h-8 sm:h-8.5 pl-8 pr-7 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearchChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
                 title="Limpar busca"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             )}
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Live refresh */}
             {onRefreshLive && (
               <button
                 onClick={onRefreshLive}
                 disabled={isRefreshing}
                 title={lastSyncTime ? `Última sincronização: ${lastSyncTime}` : 'Atualizar'}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+                className="h-8 sm:h-8.5 w-8 sm:w-8.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer flex items-center justify-center shrink-0 shadow-2xs active:scale-95"
               >
-                <RotateCw className={`w-4 h-4 text-blue-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RotateCw className={`w-3.5 h-3.5 text-blue-500 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
             )}
 
             {/* Filter Toggle */}
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition-all min-h-[44px] shrink-0 ${
+              className={`h-8 sm:h-8.5 px-2 sm:px-2.5 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all shrink-0 shadow-2xs active:scale-95 ${
                 isFilterOpen || activeInventoryFilterCount > 0
-                  ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold'
                   : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
             >
-              <Filter className="w-4 h-4" />
-              <span>Filtros</span>
+              <Filter className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Filtros</span>
               {activeInventoryFilterCount > 0 && (
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
                   {activeInventoryFilterCount}
                 </span>
               )}
             </button>
 
             {/* View Mode Toggle */}
-            <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 h-8 sm:h-8.5 shrink-0">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1 rounded-md transition-colors cursor-pointer h-6.5 w-6.5 sm:h-7 sm:w-7 flex items-center justify-center ${
                   viewMode === 'grid'
-                    ? 'bg-white dark:bg-[#202532] text-blue-600 dark:text-blue-400 shadow-xs'
+                    ? 'bg-white dark:bg-[#202532] text-blue-600 dark:text-blue-400 shadow-2xs font-bold'
                     : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
                 }`}
                 title="Visualização em Cards"
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                className={`p-1 rounded-md transition-colors cursor-pointer h-6.5 w-6.5 sm:h-7 sm:w-7 flex items-center justify-center ${
                   viewMode === 'table'
-                    ? 'bg-white dark:bg-[#202532] text-blue-600 dark:text-blue-400 shadow-xs'
+                    ? 'bg-white dark:bg-[#202532] text-blue-600 dark:text-blue-400 shadow-2xs font-bold'
                     : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
                 }`}
                 title="Visualização em Tabela"
               >
-                <List className="w-4 h-4" />
+                <List className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Cadastrar Equipamento Button */}
             <button
               onClick={onOpenAddModal}
-              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 shadow-md hover:shadow-blue-500/20 transition-all min-h-[44px] cursor-pointer shrink-0"
+              className="h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 shadow-2xs hover:shadow-blue-500/20 transition-all cursor-pointer shrink-0 active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Novo Equipamento</span>
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="hidden sm:inline">Novo</span>
+              <span className="hidden md:inline"> Equipamento</span>
             </button>
           </div>
         </div>

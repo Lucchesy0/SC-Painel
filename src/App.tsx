@@ -36,17 +36,18 @@ import { DepartmentChart } from './components/DepartmentChart';
 import { AnalyticsView } from './components/AnalyticsView';
 import { InventoryView } from './components/InventoryView';
 import { AdminModal, AdminTab } from './components/AdminModal';
+import { UserManagementModal } from './components/UserManagementModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { EquipmentModal } from './components/EquipmentModal';
 import { EquipmentDetailModal } from './components/EquipmentDetailModal';
 import { RMImportModal } from './components/RMImportModal';
-import { GlobalSearch } from './components/GlobalSearch';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { AppDrawerMenu } from './components/AppDrawerMenu';
 import { SettingsModal } from './components/SettingsModal';
 import { PasswordAuthModal } from './components/PasswordAuthModal';
 import { LoginScreen } from './components/LoginScreen';
 import { EditProfileModal } from './components/EditProfileModal';
+import { KioskModeView } from './components/KioskModeView';
 
 // Função utilitária para normalizar centros de custo em todo o site
 const normalizeSCList = (list: SC[]): { list: SC[]; changed: number } => {
@@ -88,7 +89,7 @@ export default function App() {
   const [pendingAuthUser, setPendingAuthUser] = useState<UserProfile | null>(null);
   const [adminInitialTab, setAdminInitialTab] = useState<AdminTab>('overview');
 
-  const permissions = useMemo(() => authService.getPermissions(currentUser.role), [currentUser.role]);
+  const permissions = useMemo(() => authService.getPermissions(currentUser), [currentUser]);
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('connected');
 
   // Core Data
@@ -122,6 +123,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
+  const [isKioskOpen, setIsKioskOpen] = useState(false);
   const [editingSC, setEditingSC] = useState<SC | null>(null);
   const [selectedSC, setSelectedSC] = useState<SC | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -182,17 +185,21 @@ export default function App() {
         return;
       }
 
-      // Ctrl + , / Cmd + , -> Open Settings
+      // Ctrl + , / Cmd + , -> Open Settings (Admin only)
       if (modifier && e.key === ',') {
         e.preventDefault();
-        setIsSettingsOpen((prev) => !prev);
+        if (permissions.canAccessAdmin) {
+          setIsSettingsOpen((prev) => !prev);
+        }
         return;
       }
 
-      // Ctrl + Shift + A -> Open Admin Modal
+      // Ctrl + Shift + A -> Open Admin Modal (Admin only)
       if (modifier && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        setIsAdminOpen(true);
+        if (permissions.canAccessAdmin) {
+          setIsAdminOpen(true);
+        }
         return;
       }
 
@@ -208,13 +215,14 @@ export default function App() {
         else if (selectedSC) setSelectedSC(null);
         else if (selectedEq) setSelectedEq(null);
         else if (isAdminOpen) setIsAdminOpen(false);
+        else if (isUsersModalOpen) setIsUsersModalOpen(false);
         else if (deleteConfirmId) setDeleteConfirmId(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDrawerOpen, isGlobalSearchOpen, isNotificationsOpen, isEditProfileOpen, isSettingsOpen, isModalOpen, isEqModalOpen, selectedSC, selectedEq, isAdminOpen, deleteConfirmId, activeNavTab]);
+  }, [isDrawerOpen, isGlobalSearchOpen, isNotificationsOpen, isEditProfileOpen, isSettingsOpen, isModalOpen, isEqModalOpen, selectedSC, selectedEq, isAdminOpen, isUsersModalOpen, deleteConfirmId, activeNavTab]);
 
   // Background sync helper function
   const performBackgroundSync = async (notifyUser = false) => {
@@ -613,19 +621,26 @@ export default function App() {
     ).length;
   }, [reminders]);
 
+  // Global event listener for Kiosk mode
+  useEffect(() => {
+    const handleOpenKiosk = () => setIsKioskOpen(true);
+    window.addEventListener('open-kiosk-mode', handleOpenKiosk);
+    return () => window.removeEventListener('open-kiosk-mode', handleOpenKiosk);
+  }, []);
+
   // Auto-switch navigation tab based on user permissions
   useEffect(() => {
-    if (currentUser.role === 'admin') return;
-    if (currentUser.canAccessSC === false && (activeNavTab === 'solicitacoes' || activeNavTab === 'indicadores' || activeNavTab === 'graficos')) {
-      if (currentUser.canAccessInventario !== false) {
+    if (permissions.canAccessAdmin) return;
+    if (permissions.canAccessSC === false && (activeNavTab === 'solicitacoes' || activeNavTab === 'indicadores' || activeNavTab === 'graficos')) {
+      if (permissions.canAccessInventario !== false) {
         setActiveNavTab('inventario');
       }
-    } else if (currentUser.canAccessInventario === false && activeNavTab === 'inventario') {
-      if (currentUser.canAccessSC !== false) {
+    } else if (permissions.canAccessInventario === false && activeNavTab === 'inventario') {
+      if (permissions.canAccessSC !== false) {
         setActiveNavTab('solicitacoes');
       }
     }
-  }, [currentUser, activeNavTab]);
+  }, [permissions, activeNavTab]);
 
   const handleRequestSelectUser = (targetUser: UserProfile) => {
     if (targetUser.id === currentUser.id) return;
@@ -675,7 +690,7 @@ export default function App() {
         onLoginSuccess={(user) => {
           setAuthenticatedUser(user);
           setCurrentUser(user);
-          if (user.role !== 'admin') {
+          if (user.role !== 'admin' && !user.isKiosk && user.role !== 'kiosk') {
             if (user.canAccessSC === false && user.canAccessInventario !== false) {
               setActiveNavTab('inventario');
             } else if (user.canAccessSC !== false) {
@@ -684,6 +699,18 @@ export default function App() {
           }
           showToast(`Bem-vindo ao MCM, ${user.nome}!`, 'success');
         }}
+      />
+    );
+  }
+
+  // Se o usuário logado for o perfil Quiosque / TV, renderiza diretamente o Modo Quiosque em tela cheia com tema branco
+  if (authenticatedUser.role === 'kiosk' || authenticatedUser.isKiosk || authenticatedUser.id === 'usr-quiosque') {
+    return (
+      <KioskModeView
+        scs={scs}
+        currentUser={currentUser}
+        onClose={handleLogout}
+        onLogout={handleLogout}
       />
     );
   }
@@ -701,22 +728,36 @@ export default function App() {
         theme={theme}
         currentUser={currentUser}
         users={teamUsers}
-        cloudStatus={cloudStatus}
+        cloudStatus={isRefreshing ? 'syncing' : cloudStatus}
         lastSyncTime={lastSyncTime}
+        scs={scs}
+        equipments={equipments}
+        onSelectSC={(sc) => {
+          handleNavTabChange('solicitacoes');
+          setSelectedSC(sc);
+        }}
+        onSelectEquipment={(eq) => {
+          handleNavTabChange('inventario');
+          setSelectedEq(eq);
+        }}
+        onApplyTableSearch={(query, targetMod) => {
+          handleNavTabChange(targetMod === 'inventario' ? 'inventario' : 'solicitacoes');
+          setFilters((prev) => ({ ...prev, search: query }));
+          showToast(`Filtro aplicado: "${query}"`, 'info');
+        }}
         onSelectUser={handleRequestSelectUser}
         onOpenEditProfile={() => setIsEditProfileOpen(true)}
         onOpenAdminOverview={() => {
           setAdminInitialTab('overview');
           setIsAdminOpen(true);
         }}
-        onOpenAdminUsers={() => {
-          setAdminInitialTab('users');
-          setIsAdminOpen(true);
-        }}
+        onOpenAdminUsers={() => setIsUsersModalOpen(true)}
         onLogout={handleLogout}
         onRefreshCloud={handleRefreshLive}
         onNavTabChange={handleNavTabChange}
-        onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
+        onOpenGlobalSearch={() => {
+          window.dispatchEvent(new CustomEvent('open-global-search'));
+        }}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenDrawer={() => setIsDrawerOpen(true)}
@@ -734,7 +775,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-5 pb-20 md:pb-6 flex flex-col gap-4 min-w-0">
-        {currentUser.role !== 'admin' && currentUser.canAccessSC === false && currentUser.canAccessInventario === false ? (
+        {!permissions.canAccessAdmin && !permissions.canAccessSC && !permissions.canAccessInventario ? (
           <div className="p-8 sm:p-12 text-center bg-white dark:bg-[#202634] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs max-w-lg mx-auto my-8 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
               <Lock className="w-6 h-6" />
@@ -777,6 +818,7 @@ export default function App() {
                 onToggleSCStatus={handleToggleSCStatus}
                 onOpenImportRM={() => setIsRMImportOpen(true)}
                 onExportCSV={() => exportToCSV(scs)}
+                onOpenKioskMode={() => setIsKioskOpen(true)}
                 onOpenAddSC={permissions.canCreateSC ? handleOpenAdd : undefined}
               />
             </motion.div>
@@ -1070,9 +1112,25 @@ export default function App() {
           users={teamUsers}
           currentUser={currentUser}
           initialTab={adminInitialTab}
+          onOpenUsersModal={() => {
+            setIsAdminOpen(false);
+            setIsUsersModalOpen(true);
+          }}
           onRefreshUsers={() => authService.loadUsers().then(setTeamUsers)}
           onImportData={handleImportData}
           onClearAll={handleClearAll}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Standalone User Management & Permissions Modal */}
+      {isUsersModalOpen && (
+        <UserManagementModal
+          isOpen={isUsersModalOpen}
+          onClose={() => setIsUsersModalOpen(false)}
+          users={teamUsers}
+          currentUser={currentUser}
+          onRefreshUsers={() => authService.loadUsers().then(setTeamUsers)}
           onToast={showToast}
         />
       )}
@@ -1091,8 +1149,8 @@ export default function App() {
         />
       )}
 
-      {/* Centralized Settings Modal */}
-      {isSettingsOpen && (
+      {/* Centralized Settings Modal (Admin Only) */}
+      {isSettingsOpen && permissions.canAccessAdmin && (
         <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
@@ -1120,29 +1178,7 @@ export default function App() {
         />
       )}
 
-      {/* Global Quick Search Component */}
-      {isGlobalSearchOpen && (
-        <GlobalSearch
-          isOpen={isGlobalSearchOpen}
-          onClose={() => setIsGlobalSearchOpen(false)}
-          scs={scs}
-          equipments={equipments}
-          onSelectSC={(sc) => {
-            handleNavTabChange('solicitacoes');
-            setSelectedSC(sc);
-          }}
-          onSelectEquipment={(eq) => {
-            handleNavTabChange('inventario');
-            setSelectedEq(eq);
-          }}
-          onApplyTableSearch={(query, targetMod) => {
-            handleNavTabChange(targetMod === 'inventario' ? 'inventario' : 'solicitacoes');
-            setFilters((prev) => ({ ...prev, search: query }));
-            showToast(`Filtro aplicado: "${query}"`, 'info');
-          }}
-        />
-      )}
-
+      {/* Keyboard Shortcuts Helper */}
       <KeyboardShortcuts
         onOpenAdd={
           activeNavTab !== 'inventario'
@@ -1152,50 +1188,25 @@ export default function App() {
                 setIsEqModalOpen(true);
               }
         }
-        onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenGlobalSearch={() => {
+          window.dispatchEvent(new CustomEvent('open-global-search'));
+        }}
+        onOpenSettings={permissions.canAccessAdmin ? () => setIsSettingsOpen(true) : undefined}
       />
-
-      {/* Mobile Floating Action Button (FAB) - Sempre visível e acessível no polegar */}
-      {permissions.canCreateSC && (
-        <motion.button
-          type="button"
-          id="mobileFabAddSC"
-          onClick={
-            activeNavTab === 'inventario'
-              ? () => {
-                  setEditingEq(null);
-                  setIsEqModalOpen(true);
-                }
-              : handleOpenAdd
-          }
-          whileTap={{ scale: 0.92 }}
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className={`md:hidden fixed bottom-20 right-4 z-40 flex items-center justify-center gap-1.5 px-4 py-3 rounded-full text-white shadow-xl shadow-orange-500/30 border border-white/20 font-black text-xs cursor-pointer select-none active:brightness-95 ${
-            activeNavTab === 'inventario'
-              ? 'bg-linear-to-r from-blue-600 to-indigo-600 shadow-blue-500/30'
-              : 'bg-linear-to-r from-orange-600 to-amber-600'
-          }`}
-          aria-label={activeNavTab === 'inventario' ? 'Cadastrar Novo Ativo' : 'Adicionar Nova Solicitação'}
-        >
-          <Plus className="w-5 h-5 stroke-[2.5]" />
-          <span className="font-extrabold tracking-wide">
-            {activeNavTab === 'inventario' ? 'Novo Ativo' : 'Nova SC'}
-          </span>
-        </motion.button>
-      )}
 
       {/* Mobile Sticky Bottom Navigation Bar */}
       <MobileBottomNav
         activeNavTab={activeNavTab}
-       onNavTabChange={handleNavTabChange}
-       scCount={scs.length}
+        onNavTabChange={handleNavTabChange}
+        scCount={scs.length}
         delayedCount={delayedCount}
         equipmentCount={equipments.length}
-        onOpenAdmin={() => setIsAdminOpen(true)}
-      isAdmin={currentUser.role === 'admin'}
+        onOpenAdmin={() => {
+          setAdminInitialTab('overview');
+          setIsAdminOpen(true);
+        }}
+        isAdmin={currentUser.role === 'admin'}
+        currentUser={currentUser}
       />
 
       {/* App Hamburger Drawer Menu */}
@@ -1223,11 +1234,11 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenEditProfile={() => setIsEditProfileOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenAdmin={() => setIsAdminOpen(true)}
-        onOpenAdminUsers={() => {
-          setAdminInitialTab('users');
+        onOpenAdmin={() => {
+          setAdminInitialTab('overview');
           setIsAdminOpen(true);
         }}
+        onOpenAdminUsers={() => setIsUsersModalOpen(true)}
         onLogout={handleLogout}
         onFilterDelayed={() => {
           handleNavTabChange('solicitacoes');
@@ -1239,6 +1250,16 @@ export default function App() {
           showToast('Relatório exportado em CSV!', 'success');
         }}
       />
+
+      {/* Kiosk Mode Fullscreen Overlay */}
+      <AnimatePresence>
+        {isKioskOpen && (
+          <KioskModeView
+            scs={scs}
+            onClose={() => setIsKioskOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
     </div>
