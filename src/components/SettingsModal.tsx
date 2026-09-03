@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { SC, Equipment, ThemeMode } from '../types';
 import { exportToCSV, exportEquipmentsToCSV } from '../utils/storage';
+import { getSlaSettings, saveSlaSettings } from '../utils/sla';
 import { downloadIDBBackupFile, FullBackupPayload } from '../services/backupService';
 import { dbService } from '../services/dbService';
 import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
@@ -122,12 +123,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
 
   // --- NOTIFICATION & SLA SETTINGS ---
-  const [slaDaysWarning, setSlaDaysWarning] = useState<number>(() => {
-    return Number(localStorage.getItem('mcm_setting_sla_days')) || 7;
-  });
-  const [criticalOverdueDays, setCriticalOverdueDays] = useState<number>(() => {
-    return Number(localStorage.getItem('mcm_setting_critical_days')) || 15;
-  });
+  const [slaDaysWarning, setSlaDaysWarning] = useState<number>(() => getSlaSettings().slaDaysWarning);
+  const [criticalOverdueDays, setCriticalOverdueDays] = useState<number>(() => getSlaSettings().criticalOverdueDays);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('mcm_setting_sound') !== 'false';
   });
@@ -176,17 +173,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    if (navigator.storage && navigator.storage.estimate) {
-      navigator.storage.estimate().then((estimate) => {
-        const usageMB = (estimate.usage || 0) / (1024 * 1024);
-        const quotaMB = (estimate.quota || 0) / (1024 * 1024);
-        const percent = quotaMB > 0 ? (usageMB / quotaMB) * 100 : 0;
-        setStorageInfo({
-          usageMB: Math.round(usageMB * 10) / 10,
-          quotaMB: Math.round(quotaMB),
-          percent: Math.min(100, Math.round(percent * 10) / 10),
-        });
-      }).catch(() => {});
+    if (isOpen) {
+      const curSla = getSlaSettings();
+      setSlaDaysWarning(curSla.slaDaysWarning);
+      setCriticalOverdueDays(curSla.criticalOverdueDays);
+
+      if (navigator.storage && navigator.storage.estimate) {
+        navigator.storage.estimate().then((estimate) => {
+          const usageMB = (estimate.usage || 0) / (1024 * 1024);
+          const quotaMB = (estimate.quota || 0) / (1024 * 1024);
+          const percent = quotaMB > 0 ? (usageMB / quotaMB) * 100 : 0;
+          setStorageInfo({
+            usageMB: Math.round(usageMB * 10) / 10,
+            quotaMB: Math.round(quotaMB),
+            percent: Math.min(100, Math.round(percent * 10) / 10),
+          });
+        }).catch(() => {});
+      }
     }
   }, [isOpen]);
 
@@ -258,14 +261,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onToast('Preferências visuais atualizadas!', 'success');
   };
 
+  // Immediate live updates for SLA settings
+  const handleSlaDaysWarningChange = (val: number) => {
+    const clean = Math.max(1, Math.min(120, val));
+    setSlaDaysWarning(clean);
+    saveSlaSettings({ slaDaysWarning: clean });
+  };
+
+  const handleCriticalOverdueDaysChange = (val: number) => {
+    const clean = Math.max(2, Math.min(180, val));
+    setCriticalOverdueDays(clean);
+    saveSlaSettings({ criticalOverdueDays: clean });
+  };
+
   // Save SLA & Notifications
   const handleSaveNotifications = () => {
-    localStorage.setItem('mcm_setting_sla_days', String(slaDaysWarning));
-    localStorage.setItem('mcm_setting_critical_days', String(criticalOverdueDays));
+    saveSlaSettings({
+      slaDaysWarning,
+      criticalOverdueDays,
+    });
     localStorage.setItem('mcm_setting_sound', String(soundEnabled));
     localStorage.setItem('mcm_setting_preventive_alerts', String(preventiveAlerts));
     triggerCompletionFeedback();
-    onToast('Parâmetros de SLA e Notificações atualizados!', 'success');
+    onToast('Parâmetros de SLA e Notificações atualizados com sucesso!', 'success');
   };
 
   // Save Integrations
@@ -697,52 +715,121 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Dias para Alerta de Vencimento */}
-                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/40 space-y-2">
+                  <div className="p-4 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/10 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        Alerta de Vencimento Próximo
-                      </label>
-                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                        {slaDaysWarning} dias
-                      </span>
+                      <div>
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                          Alerta de Vencimento Geral
+                        </label>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                          Padrão de atraso da tabela e indicadores
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          max="90"
+                          value={slaDaysWarning}
+                          onChange={(e) => handleSlaDaysWarningChange(Number(e.target.value) || 1)}
+                          className="w-14 text-center text-xs font-mono font-bold py-1 rounded-lg border border-amber-500/50 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                        />
+                        <span className="text-xs font-semibold text-slate-500">dias</span>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      SCs abertas sem conclusão há mais de {slaDaysWarning} dias ficam amarelas.
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Solicitações abertas há mais de <strong className="text-amber-600 dark:text-amber-400">{slaDaysWarning} dias</strong> serão classificadas como <strong className="text-rose-600 dark:text-rose-400">Atrasadas</strong> na tabela e nos gráficos.
+                    </p>
+                    <input
+                      type="range"
+                      min="1"
+                      max="60"
+                      step="1"
+                      value={slaDaysWarning}
+                      onChange={(e) => handleSlaDaysWarningChange(Number(e.target.value))}
+                      className="w-full accent-amber-500 cursor-pointer"
+                    />
+                    {/* Quick Preset Buttons */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-400 font-medium">Atalhos:</span>
+                      {[7, 10, 15, 20, 30].map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => handleSlaDaysWarningChange(days)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                            slaDaysWarning === days
+                              ? 'bg-amber-500 text-white shadow-2xs'
+                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-amber-400'
+                          }`}
+                        >
+                          {days}d
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dias para Atraso Crítico */}
+                  <div className="p-4 rounded-2xl border border-red-200/80 dark:border-red-900/40 bg-red-50/30 dark:bg-red-950/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                          Atraso Crítico (&gt; Vermelho)
+                        </label>
+                        <span className="text-[10px] text-red-700 dark:text-red-400 font-medium">
+                          Nível severo de urgência
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="2"
+                          max="120"
+                          value={criticalOverdueDays}
+                          onChange={(e) => handleCriticalOverdueDaysChange(Number(e.target.value) || 2)}
+                          className="w-14 text-center text-xs font-mono font-bold py-1 rounded-lg border border-red-500/50 bg-white dark:bg-slate-800 text-red-700 dark:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 shadow-2xs"
+                        />
+                        <span className="text-xs font-semibold text-slate-500">dias</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      SCs abertas há mais de <strong className="text-red-600 dark:text-red-400">{criticalOverdueDays} dias</strong> recebem destaque vermelho urgente e prioridade nas notificações.
                     </p>
                     <input
                       type="range"
                       min="3"
-                      max="30"
-                      step="1"
-                      value={slaDaysWarning}
-                      onChange={(e) => setSlaDaysWarning(Number(e.target.value))}
-                      className="w-full accent-amber-500 cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Dias para Atraso Crítico */}
-                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/40 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        Atraso Crítico (&gt; Vermelho)
-                      </label>
-                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30">
-                        {criticalOverdueDays} dias
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      SCs com mais de {criticalOverdueDays} dias são marcadas em vermelho urgente.
-                    </p>
-                    <input
-                      type="range"
-                      min="7"
-                      max="60"
+                      max="90"
                       step="1"
                       value={criticalOverdueDays}
-                      onChange={(e) => setCriticalOverdueDays(Number(e.target.value))}
+                      onChange={(e) => handleCriticalOverdueDaysChange(Number(e.target.value))}
                       className="w-full accent-red-500 cursor-pointer"
                     />
+                    {/* Quick Preset Buttons */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-400 font-medium">Atalhos:</span>
+                      {[15, 20, 30, 45, 60].map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => handleCriticalOverdueDaysChange(days)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                            criticalOverdueDays === days
+                              ? 'bg-red-600 text-white shadow-2xs'
+                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-red-400'
+                          }`}
+                        >
+                          {days}d
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <span>
+                    <strong>Atualização em tempo real:</strong> qualquer alteração nos prazos acima atualiza instantaneamente a tabela de SCs, os filtros de atrasadas/vencendo e todos os gráficos.
+                  </span>
                 </div>
 
                 {/* Toggles */}

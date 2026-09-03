@@ -1,43 +1,134 @@
 import { SC, Equipment } from '../types';
 
 const DB_NAME = 'MCM_Industrial_DB';
-const DB_VERSION = 3;
+const TARGET_DB_VERSION = 6;
 const STORE_NAME = 'solicitacoes';
 const SETTINGS_STORE = 'settings';
 const EQUIPMENT_STORE = 'equipamentos';
 const CLEAN_RESET_KEY = 'mcm_db_clean_reset_v5';
 
-function openDB(): Promise<IDBDatabase> {
+let activeDB: IDBDatabase | null = null;
+let pendingOpenPromise: Promise<IDBDatabase> | null = null;
+
+function setupStores(db: IDBDatabase): void {
+  if (!db.objectStoreNames.contains(STORE_NAME)) {
+    const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+    store.createIndex('numero', 'numero', { unique: false });
+    store.createIndex('status', 'status', { unique: false });
+    store.createIndex('data', 'data', { unique: false });
+  }
+  if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+    db.createObjectStore(SETTINGS_STORE, { keyPath: 'key' });
+  }
+  if (!db.objectStoreNames.contains(EQUIPMENT_STORE)) {
+    const eqStore = db.createObjectStore(EQUIPMENT_STORE, { keyPath: 'id' });
+    eqStore.createIndex('codigoPatrimonio', 'codigoPatrimonio', { unique: true });
+    eqStore.createIndex('categoria', 'categoria', { unique: false });
+    eqStore.createIndex('status', 'status', { unique: false });
+  }
+}
+
+function attachDBListeners(db: IDBDatabase): void {
+  db.onversionchange = () => {
+    db.close();
+    if (activeDB === db) activeDB = null;
+  };
+  db.onclose = () => {
+    if (activeDB === db) activeDB = null;
+  };
+}
+
+function openWithExactVersion(version?: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = version !== undefined ? indexedDB.open(DB_NAME, version) : indexedDB.open(DB_NAME);
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('numero', 'numero', { unique: false });
-        store.createIndex('status', 'status', { unique: false });
-        store.createIndex('data', 'data', { unique: false });
-      }
-      if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
-        db.createObjectStore(SETTINGS_STORE, { keyPath: 'key' });
-      }
-      if (!db.objectStoreNames.contains(EQUIPMENT_STORE)) {
-        const eqStore = db.createObjectStore(EQUIPMENT_STORE, { keyPath: 'id' });
-        eqStore.createIndex('codigoPatrimonio', 'codigoPatrimonio', { unique: true });
-        eqStore.createIndex('categoria', 'categoria', { unique: false });
-        eqStore.createIndex('status', 'status', { unique: false });
-      }
+      setupStores(db);
     };
 
     request.onsuccess = () => {
-      resolve(request.result);
+      const db = request.result;
+      attachDBListeners(db);
+
+      const hasAllStores =
+        db.objectStoreNames.contains(STORE_NAME) &&
+        db.objectStoreNames.contains(SETTINGS_STORE) &&
+        db.objectStoreNames.contains(EQUIPMENT_STORE);
+
+      if (!hasAllStores) {
+        const nextVer = (db.version || 1) + 1;
+        db.close();
+        openWithExactVersion(nextVer).then(resolve).catch(reject);
+      } else {
+        resolve(db);
+      }
     };
 
     request.onerror = () => {
-      reject(request.error);
+      const err = request.error;
+      // Handle VersionError gracefully if requested version is less than existing version
+      if (err && (err.name === 'VersionError' || err.message?.includes('less than the existing version'))) {
+        const match = err.message?.match(/existing version \((\d+)\)/);
+        const existingVer = match ? parseInt(match[1], 10) : undefined;
+        if (existingVer && existingVer !== version) {
+          openWithExactVersion(existingVer).then(resolve).catch(reject);
+          return;
+        }
+        // Fallback: open without specifying version (opens at existing database version)
+        openWithExactVersion(undefined).then(resolve).catch(reject);
+        return;
+      }
+      reject(err);
+    };
+
+    request.onblocked = () => {
+      console.warn('IndexedDB upgrade blocked by another connection. Closing active connection...');
+      if (activeDB) {
+        activeDB.close();
+        activeDB = null;
+      }
     };
   });
+}
+
+function openDB(): Promise<IDBDatabase> {
+  if (activeDB) {
+    try {
+      activeDB.transaction([STORE_NAME], 'readonly');
+      return Promise.resolve(activeDB);
+    } catch {
+      activeDB = null;
+    }
+  }
+
+  if (pendingOpenPromise) {
+    return pendingOpenPromise;
+  }
+
+  pendingOpenPromise = (async () => {
+    try {
+      let verToOpen = TARGET_DB_VERSION;
+      if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
+        try {
+          const dbs = await indexedDB.databases();
+          const existing = dbs.find((d) => d.name === DB_NAME);
+          if (existing && existing.version && existing.version > verToOpen) {
+            verToOpen = existing.version;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const db = await openWithExactVersion(verToOpen);
+      activeDB = db;
+      return db;
+    } finally {
+      pendingOpenPromise = null;
+    }
+  })();
+
+  return pendingOpenPromise;
 }
 
 // Garante que o banco seja iniciado totalmente limpo (sem dados de exemplo/treinamento)

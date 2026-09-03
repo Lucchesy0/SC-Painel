@@ -1,5 +1,6 @@
 import { SC } from '../types';
 import { clearIDB } from './indexedDB';
+import { getSlaSettings } from './sla';
 
 export const INITIAL_SCS: SC[] = [];
 
@@ -174,9 +175,145 @@ export function formatDateBR(dateString: string): string {
   return dateString;
 }
 
-export function isDelayed(dataString: string, status: string, thresholdDays = 7): boolean {
+export function isDelayed(dataString: string, status: string, thresholdDays?: number): boolean {
   if (status === 'Concluído') return false;
-  return calcDays(dataString, status) > thresholdDays;
+  const threshold = typeof thresholdDays === 'number' ? thresholdDays : getSlaSettings().slaDaysWarning;
+  return calcDays(dataString, status) > threshold;
+}
+
+/**
+ * Extrai o valor numérico de um número de SC para ordenação e comparação matemática precisa
+ */
+export function extractSCNumber(numStr?: string | number | null): number {
+  if (numStr === undefined || numStr === null) return 0;
+  if (typeof numStr === 'number') return numStr;
+  const cleaned = String(numStr).replace(/\D/g, '');
+  const parsed = parseInt(cleaned, 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Compara dois números de SC ordenando primariamente de forma numérica
+ */
+export function compareSCNumbers(
+  aNum?: string | number | null,
+  bNum?: string | number | null,
+  order: 'desc' | 'asc' = 'desc'
+): number {
+  const numA = extractSCNumber(aNum);
+  const numB = extractSCNumber(bNum);
+  if (numA !== numB) {
+    return order === 'desc' ? numB - numA : numA - numB;
+  }
+  const strA = String(aNum || '');
+  const strB = String(bNum || '');
+  return order === 'desc'
+    ? strB.localeCompare(strA, undefined, { numeric: true, sensitivity: 'base' })
+    : strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/**
+ * Normaliza qualquer formato de data (DD/MM/AAAA, YYYY-MM-DD, ISO, etc.) para YYYY-MM-DD
+ */
+export function normalizeDateToYYYYMMDD(dateStr?: string): string | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // Se já for YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Se for ISO ou contiver T (ex: 2026-09-01T14:30:00)
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+    return trimmed.split('T')[0];
+  }
+
+  // Se começar com DD/MM/YYYY (ex: 01/09/2026 ou 01/09/2026 14:30)
+  const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  if (ddmmyyyyMatch) {
+    const [, d, m, y] = ddmmyyyyMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // Se começar com YYYY/MM/DD
+  const yyyymmddMatch = trimmed.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})/);
+  if (yyyymmddMatch) {
+    const [, y, m, d] = yyyymmddMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+
+  return null;
+}
+
+/**
+ * Obtém a data estimada/registrada de conclusão de uma SC em formato YYYY-MM-DD
+ */
+export function getSCCompletionDateISO(sc: SC): string | null {
+  if (sc.status !== 'Concluído') return null;
+
+  // 1. Procura no histórico de auditoria por evento de conclusão
+  if (sc.historicoAuditoria && sc.historicoAuditoria.length > 0) {
+    const conclusaoEntry = sc.historicoAuditoria.find(
+      (h) =>
+        (h.tipo && h.tipo.toLowerCase().includes('conclus')) ||
+        (h.descricao && h.descricao.toLowerCase().includes('conclu'))
+    );
+    if (conclusaoEntry?.dataHora) {
+      const normalized = normalizeDateToYYYYMMDD(conclusaoEntry.dataHora);
+      if (normalized) return normalized;
+    }
+  }
+
+  // 2. Procura em ultimaAlteracao
+  if (sc.ultimaAlteracao?.tipo && sc.ultimaAlteracao.tipo.toLowerCase().includes('conclus')) {
+    const normalized = normalizeDateToYYYYMMDD(sc.ultimaAlteracao.dataHora);
+    if (normalized) return normalized;
+  }
+
+  // 3. Fallback: data de registro da SC
+  return normalizeDateToYYYYMMDD(sc.data);
+}
+
+/**
+ * Verifica se uma SC atende aos critérios de intervalo de datas (início e fim)
+ */
+export function isSCInDateRange(
+  sc: SC,
+  dataInicio?: string,
+  dataFim?: string,
+  tipoData: 'abertura' | 'conclusao' | 'ambas' = 'abertura'
+): boolean {
+  if (!dataInicio && !dataFim) return true;
+
+  const checkSingleDate = (dateISO: string | null): boolean => {
+    if (!dateISO) return false;
+    if (dataInicio && dateISO < dataInicio) return false;
+    if (dataFim && dateISO > dataFim) return false;
+    return true;
+  };
+
+  const dataAberturaISO = normalizeDateToYYYYMMDD(sc.data);
+  const dataConclusaoISO = getSCCompletionDateISO(sc);
+
+  if (tipoData === 'abertura') {
+    return checkSingleDate(dataAberturaISO);
+  }
+
+  if (tipoData === 'conclusao') {
+    return sc.status === 'Concluído' && checkSingleDate(dataConclusaoISO);
+  }
+
+  // 'ambas'
+  const matchAbertura = checkSingleDate(dataAberturaISO);
+  const matchConclusao = sc.status === 'Concluído' && checkSingleDate(dataConclusaoISO);
+  return matchAbertura || matchConclusao;
 }
 
 export function exportToCSV(scs: SC[]): void {

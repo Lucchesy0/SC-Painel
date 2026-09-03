@@ -26,7 +26,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { SC, Equipment, UserProfile } from '../types';
-import { exportToCSV, exportEquipmentsToCSV } from '../utils/storage';
+import { exportToCSV, exportEquipmentsToCSV, calcDays } from '../utils/storage';
+import { getSlaSettings, saveSlaSettings } from '../utils/sla';
 import { downloadIDBBackupFile, FullBackupPayload } from '../services/backupService';
 import { dbService } from '../services/dbService';
 import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
@@ -84,10 +85,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [dangerConfirmText, setDangerConfirmText] = useState('');
   const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
 
-  // Settings State (persisted in localStorage)
-  const [slaDays, setSlaDays] = useState<number>(() => {
-    return Number(localStorage.getItem('mcm_setting_sla_days')) || 15;
-  });
+  // Settings State (persisted in localStorage and synchronized with SLA system)
+  const [slaDays, setSlaDays] = useState<number>(() => getSlaSettings().slaDaysWarning);
   const [autoSyncInterval, setAutoSyncInterval] = useState<number>(() => {
     return Number(localStorage.getItem('mcm_setting_sync_interval')) || 30;
   });
@@ -109,6 +108,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+
+    setSlaDays(getSlaSettings().slaDaysWarning);
 
     if (navigator.storage && navigator.storage.estimate) {
       navigator.storage.estimate().then((estimate) => {
@@ -132,19 +133,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const emAndamentoSCs = totalSCs - concluidasSCs;
   const atrasadasSCs = scs.filter((s) => {
     if (s.status === 'Concluído') return false;
-    if (!s.data) return false;
-    const parts = s.data.split('/');
-    if (parts.length === 3) {
-      const dt = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-      const diffDays = Math.floor((Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24));
-      return diffDays > slaDays;
-    }
-    return false;
+    const days = calcDays(s.data, s.status);
+    return days > slaDays;
   }).length;
 
   const totalEquipments = equipments.length;
-  const emUsoEquipments = equipments.filter((e) => e.status === 'Em Uso').length;
-  const disponiveisEquipments = equipments.filter((e) => e.status === 'Disponível').length;
+  const ativadosEquipments = equipments.filter((e) => e.status === 'Ativado' || (e.status as string) === 'Em Uso').length;
+  const manutencaoEquipments = equipments.filter((e) => e.status === 'Manutenção').length;
 
   const totalUsers = users.length;
   const adminUsersCount = users.filter((u) => u.role === 'admin').length;
@@ -152,7 +147,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const usersWithoutPassword = totalUsers - usersWithPassword;
 
   const handleSaveSettings = () => {
-    localStorage.setItem('mcm_setting_sla_days', String(slaDays));
+    saveSlaSettings({ slaDaysWarning: slaDays });
     localStorage.setItem('mcm_setting_sync_interval', String(autoSyncInterval));
     localStorage.setItem('mcm_setting_default_cc', defaultCostCenter);
     localStorage.setItem('mcm_setting_sound', String(soundAlerts));
@@ -376,8 +371,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   </div>
                   <div className="text-xl font-bold text-slate-900">{totalEquipments}</div>
                   <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>{emUsoEquipments} em uso</span>
-                    <span className="text-blue-700 font-medium">{disponiveisEquipments} disponíveis</span>
+                    <span>{ativadosEquipments} ativos</span>
+                    <span className="text-amber-700 font-medium">{manutencaoEquipments} em manutenção</span>
                   </div>
                 </div>
 
@@ -721,11 +716,17 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </label>
                     <select
                       value={slaDays}
-                      onChange={(e) => setSlaDays(Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setSlaDays(val);
+                        saveSlaSettings({ slaDaysWarning: val });
+                      }}
                       className="w-full text-xs px-3 py-2 rounded-md border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                     >
                       <option value={7}>7 dias corridos</option>
+                      <option value={10}>10 dias corridos</option>
                       <option value={15}>15 dias corridos (Padrão)</option>
+                      <option value={20}>20 dias corridos</option>
                       <option value={30}>30 dias corridos</option>
                       <option value={45}>45 dias corridos</option>
                     </select>

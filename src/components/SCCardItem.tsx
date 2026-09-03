@@ -10,10 +10,11 @@ import {
   Check,
   RotateCcw,
   Package,
+  MessageSquare,
 } from 'lucide-react';
 import { SC, RolePermissions } from '../types';
 import { calcDays, formatDateBR } from '../utils/storage';
-import { calculateSCReminderInfo } from '../services/notificationService';
+import { useSlaSettings, isSCDelayed, isSCDueSoon, calculateSCReminderInfo } from '../utils/sla';
 import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
 
 interface SCCardItemProps {
@@ -28,23 +29,16 @@ interface SCCardItemProps {
 export const SCCardItem: React.FC<SCCardItemProps> = memo(
   ({ sc, permissions, onSelectSC, onEditSC, onDeleteSC, onToggleStatus }) => {
     const [isCompletingAnim, setIsCompletingAnim] = useState(false);
+    const slaSettings = useSlaSettings();
     const dias = calcDays(sc.data, sc.status);
-    const reminder = calculateSCReminderInfo(sc);
-    const isAtrasada = sc.status !== 'Concluído' && (reminder.urgency === 'atrasada' || dias > 7);
+    const reminder = calculateSCReminderInfo(sc, undefined, slaSettings);
+    const isAtrasada = sc.status !== 'Concluído' && (reminder.urgency === 'atrasada' || isSCDelayed(sc, slaSettings));
     const isHoje = sc.status !== 'Concluído' && reminder.urgency === 'hoje';
     const isBreve =
-      sc.status !== 'Concluído' && (reminder.urgency === 'breve' || (dias >= 5 && dias <= 7));
+      sc.status !== 'Concluído' && (reminder.urgency === 'breve' || isSCDueSoon(sc, slaSettings));
 
     const canEdit = permissions?.canEditSC ?? true;
     const canDelete = permissions?.canDeleteSC ?? true;
-
-    // Delivery stats
-    const totalItensCount = sc.itens.length;
-    const deliveredCount = sc.itens.filter(
-      (it) => (it.quantidadeRecebida ?? 0) >= (it.quantidadeSolicitada ?? it.quantidade ?? 1)
-    ).length;
-    const isAllDelivered = totalItensCount > 0 && deliveredCount === totalItensCount;
-    const isPartialDelivered = deliveredCount > 0 && !isAllDelivered;
 
     const handleStatusToggle = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -99,7 +93,7 @@ export const SCCardItem: React.FC<SCCardItemProps> = memo(
             disabled={!canEdit}
             title={
               !canEdit
-                ? 'Somente Comprador ou Almoxarifado podem alterar status'
+                ? 'Somente Comprador ou Administrador podem alterar status'
                 : sc.status === 'Concluído'
                 ? 'Concluída! Toque para reabrir'
                 : 'Toque para marcar como Concluída'
@@ -166,8 +160,8 @@ export const SCCardItem: React.FC<SCCardItemProps> = memo(
           {sc.itens.slice(0, 2).map((item, idx) => (
             <div key={idx} className="flex justify-between text-slate-700 dark:text-slate-200 text-[11px] sm:text-xs">
               <span className="truncate pr-2">{item.descricao}</span>
-              <span className="font-mono text-slate-500 shrink-0">
-                {item.quantidadeRecebida || 0}/{item.quantidadeSolicitada ?? item.quantidade ?? 1}{' '}
+              <span className="font-mono text-slate-500 shrink-0 font-bold">
+                {item.quantidadeSolicitada ?? item.quantidade ?? 1}{' '}
                 {item.unidade || 'UN'}
               </span>
             </div>
@@ -176,23 +170,11 @@ export const SCCardItem: React.FC<SCCardItemProps> = memo(
             <p className="text-[9px] sm:text-[10px] text-slate-400">+{sc.itens.length - 2} outro(s) item(ns)...</p>
           )}
 
-          {/* Delivery progress bar */}
-          {totalItensCount > 0 && (
-            <div className="pt-1">
-              <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 font-semibold mb-0.5">
-                <span>Recebimento</span>
-                <span>
-                  {deliveredCount} de {totalItensCount} ({Math.round((deliveredCount / totalItensCount) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 h-1 sm:h-1.5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${
-                    isAllDelivered ? 'bg-emerald-500' : isPartialDelivered ? 'bg-blue-500' : 'bg-slate-400'
-                  }`}
-                  style={{ width: `${(deliveredCount / totalItensCount) * 100}%` }}
-                />
-              </div>
+          {/* Comment / Observações preview if present */}
+          {(sc.observacoes || sc.comentarios) && (
+            <div className="pt-1 text-[10px] text-slate-500 dark:text-slate-400 flex items-start gap-1 line-clamp-1 border-t border-slate-100 dark:border-slate-800/80">
+              <MessageSquare className="w-3 h-3 text-orange-500 shrink-0 mt-0.5" />
+              <span className="truncate italic">{sc.observacoes || sc.comentarios}</span>
             </div>
           )}
         </div>

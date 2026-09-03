@@ -18,10 +18,13 @@ import {
   RotateCw,
   Download,
   Tv,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { SC, FilterOptions, GridConfig, RolePermissions, UserProfile } from '../types';
-import { calcDays, isDelayed, formatDateBR } from '../utils/storage';
-import { calculateSCReminderInfo } from '../services/notificationService';
+import { calcDays, formatDateBR, isSCInDateRange, compareSCNumbers } from '../utils/storage';
+import { useSlaSettings, isSCDelayed, isSCDueSoon, calculateSCReminderInfo } from '../utils/sla';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDebounce } from '../hooks/useDebounce';
 import { SCRowItem } from './SCRowItem';
@@ -47,7 +50,7 @@ interface SCTableProps {
 
 const DEFAULT_GRID_CONFIG: GridConfig = {
   viewMode: 'table',
-  density: 'comfortable',
+  density: 'compact',
   visibleColumns: {
     numero: true,
     data: true,
@@ -76,6 +79,10 @@ export const SCTable: React.FC<SCTableProps> = ({
   onOpenAddSC,
   onOpenKioskMode,
 }) => {
+  const slaSettings = useSlaSettings();
+  const windowDays = Math.max(2, Math.min(5, Math.ceil(slaSettings.slaDaysWarning * 0.3)));
+  const dueSoonMin = Math.max(1, slaSettings.slaDaysWarning - windowDays);
+
   // Hover card state
   const [hoveredSC, setHoveredSC] = useState<SC | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -141,34 +148,69 @@ export const SCTable: React.FC<SCTableProps> = ({
       const matchStatus = !filters.status || sc.status === filters.status;
 
       let matchPrazo = true;
-      const dias = calcDays(sc.data, sc.status);
-      const reminder = calculateSCReminderInfo(sc);
+      const reminder = calculateSCReminderInfo(sc, undefined, slaSettings);
 
       if (filters.prazo === 'pendentes') matchPrazo = sc.status === 'Em andamento';
       if (filters.prazo === 'concluidas') matchPrazo = sc.status === 'Concluído';
       if (filters.prazo === 'atrasadas') {
-        matchPrazo = sc.status === 'Em andamento' && (dias > 7 || reminder.urgency === 'atrasada');
+        matchPrazo = sc.status === 'Em andamento' && (isSCDelayed(sc, slaSettings) || reminder.urgency === 'atrasada');
       }
       if (filters.prazo === 'vencendo_breve') {
         matchPrazo =
           sc.status === 'Em andamento' &&
-          (reminder.urgency === 'breve' || reminder.urgency === 'hoje' || (dias >= 5 && dias <= 7));
+          (isSCDueSoon(sc, slaSettings) || reminder.urgency === 'breve' || reminder.urgency === 'hoje');
       }
 
-      return matchSearch && matchStatus && matchPrazo;
+      const matchDateRange = isSCInDateRange(
+        sc,
+        filters.dataInicio,
+        filters.dataFim,
+        filters.tipoData || 'abertura'
+      );
+
+      return matchSearch && matchStatus && matchPrazo && matchDateRange;
     });
 
     result.sort((a, b) => {
-      if (filters.sort === 'data-desc') return new Date(b.data).getTime() - new Date(a.data).getTime();
-      if (filters.sort === 'data-asc') return new Date(a.data).getTime() - new Date(b.data).getTime();
-      if (filters.sort === 'dias-desc')
-        return calcDays(b.data, b.status) - calcDays(a.data, a.status);
-      if (filters.sort === 'status') return a.status.localeCompare(b.status);
-      return 0;
+      if (filters.sort === 'numero-desc') {
+        return compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      if (filters.sort === 'numero-asc') {
+        return compareSCNumbers(a.numero, b.numero, 'asc');
+      }
+      if (filters.sort === 'data-desc') {
+        const diff = new Date(b.data).getTime() - new Date(a.data).getTime();
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      if (filters.sort === 'data-asc') {
+        const diff = new Date(a.data).getTime() - new Date(b.data).getTime();
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'asc');
+      }
+      if (filters.sort === 'dias-desc') {
+        const diff = calcDays(b.data, b.status) - calcDays(a.data, a.status);
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      if (filters.sort === 'dias-asc') {
+        const diff = calcDays(a.data, a.status) - calcDays(b.data, b.status);
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      if (filters.sort === 'solicitante-asc') {
+        const diff = a.solicitante.localeCompare(b.solicitante);
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      if (filters.sort === 'solicitante-desc') {
+        const diff = b.solicitante.localeCompare(a.solicitante);
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      if (filters.sort === 'status') {
+        const diff = a.status.localeCompare(b.status);
+        return diff !== 0 ? diff : compareSCNumbers(a.numero, b.numero, 'desc');
+      }
+      return compareSCNumbers(a.numero, b.numero, 'desc');
     });
 
     return result;
-  }, [scs, debouncedSearch, filters.status, filters.prazo, filters.sort]);
+  }, [scs, debouncedSearch, filters.status, filters.prazo, filters.sort, filters.dataInicio, filters.dataFim, filters.tipoData, slaSettings]);
 
   const toggleColumn = (key: keyof GridConfig['visibleColumns']) => {
     setGridConfig((prev) => ({
@@ -180,13 +222,96 @@ export const SCTable: React.FC<SCTableProps> = ({
     }));
   };
 
+  const handleSortClick = (column: 'numero' | 'data' | 'solicitante' | 'status' | 'dias') => {
+    let nextSort: FilterOptions['sort'] = 'numero-desc';
+    if (column === 'numero') {
+      nextSort = filters.sort === 'numero-desc' ? 'numero-asc' : 'numero-desc';
+    } else if (column === 'data') {
+      nextSort = filters.sort === 'data-desc' ? 'data-asc' : 'data-desc';
+    } else if (column === 'solicitante') {
+      nextSort = filters.sort === 'solicitante-asc' ? 'solicitante-desc' : 'solicitante-asc';
+    } else if (column === 'dias') {
+      nextSort = filters.sort === 'dias-desc' ? 'dias-asc' : 'dias-desc';
+    } else if (column === 'status') {
+      nextSort = filters.sort === 'status' ? 'numero-desc' : 'status';
+    }
+    onFilterChange({ ...filters, sort: nextSort });
+  };
+
+  const renderSortIcon = (column: 'numero' | 'data' | 'solicitante' | 'status' | 'dias') => {
+    let isCurrent = false;
+    let isAsc = false;
+    if (column === 'numero') {
+      isCurrent = filters.sort === 'numero-desc' || filters.sort === 'numero-asc';
+      isAsc = filters.sort === 'numero-asc';
+    } else if (column === 'data') {
+      isCurrent = filters.sort === 'data-desc' || filters.sort === 'data-asc';
+      isAsc = filters.sort === 'data-asc';
+    } else if (column === 'solicitante') {
+      isCurrent = filters.sort === 'solicitante-asc' || filters.sort === 'solicitante-desc';
+      isAsc = filters.sort === 'solicitante-asc';
+    } else if (column === 'dias') {
+      isCurrent = filters.sort === 'dias-desc' || filters.sort === 'dias-asc';
+      isAsc = filters.sort === 'dias-asc';
+    } else if (column === 'status') {
+      isCurrent = filters.sort === 'status';
+      isAsc = false;
+    }
+
+    if (!isCurrent) {
+      return (
+        <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
+      );
+    }
+    return isAsc ? (
+      <ArrowUp className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 stroke-[2.5] shrink-0" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 stroke-[2.5] shrink-0" />
+    );
+  };
+
   const cellPadding =
-    gridConfig.density === 'compact' ? 'px-3 py-1.5 text-xs' : 'px-4 py-3 text-sm';
+    gridConfig.density === 'compact' ? 'px-3 py-1.5 text-xs' : 'px-3.5 py-2 text-xs sm:text-[13px]';
+
+  const hasDateFilter = Boolean(filters.dataInicio || filters.dataFim);
 
   const activeFilterCount =
     (filters.status !== '' ? 1 : 0) +
     (filters.prazo !== 'todos' ? 1 : 0) +
-    (filters.sort !== 'data-desc' ? 1 : 0);
+    (filters.sort !== 'numero-desc' ? 1 : 0) +
+    (hasDateFilter ? 1 : 0);
+
+  // Date Range Quick Preset Handlers
+  const handleDatePreset = (preset: 'hoje' | '7dias' | '30dias' | 'esteMes' | 'mesAnterior') => {
+    const today = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    if (preset === 'hoje') {
+      const todayISO = toISO(today);
+      onFilterChange({ ...filters, dataInicio: todayISO, dataFim: todayISO });
+    } else if (preset === '7dias') {
+      const past7 = new Date();
+      past7.setDate(today.getDate() - 7);
+      onFilterChange({ ...filters, dataInicio: toISO(past7), dataFim: toISO(today) });
+    } else if (preset === '30dias') {
+      const past30 = new Date();
+      past30.setDate(today.getDate() - 30);
+      onFilterChange({ ...filters, dataInicio: toISO(past30), dataFim: toISO(today) });
+    } else if (preset === 'esteMes') {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      onFilterChange({ ...filters, dataInicio: toISO(start), dataFim: toISO(end) });
+    } else if (preset === 'mesAnterior') {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0);
+      onFilterChange({ ...filters, dataInicio: toISO(start), dataFim: toISO(end) });
+    }
+  };
+
+  const handleClearDateFilter = () => {
+    onFilterChange({ ...filters, dataInicio: '', dataFim: '' });
+  };
 
   const { totalCount, emAndamentoCount, delayedCount, vencendoBreveCount, concluidasCount } =
     useMemo(() => {
@@ -200,9 +325,12 @@ export const SCTable: React.FC<SCTableProps> = ({
           concluidas++;
         } else {
           emAnd++;
-          const d = calcDays(s.data, s.status);
-          if (d > 7) delayed++;
-          if (d >= 4 && d <= 7) vencendo++;
+          const rem = calculateSCReminderInfo(s, undefined, slaSettings);
+          if (isSCDelayed(s, slaSettings) || rem.urgency === 'atrasada') {
+            delayed++;
+          } else if (isSCDueSoon(s, slaSettings) || rem.urgency === 'breve' || rem.urgency === 'hoje') {
+            vencendo++;
+          }
         }
       }
 
@@ -213,7 +341,7 @@ export const SCTable: React.FC<SCTableProps> = ({
         vencendoBreveCount: vencendo,
         concluidasCount: concluidas,
       };
-    }, [scs]);
+    }, [scs, slaSettings]);
 
   return (
     <section className="bg-white dark:bg-[#202634] rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex flex-col overflow-hidden relative max-w-full w-full min-w-0">
@@ -354,8 +482,8 @@ export const SCTable: React.FC<SCTableProps> = ({
               {[
                 { id: 'todos', label: 'Todas', prazo: 'todos', status: '', count: totalCount, color: 'text-slate-700 dark:text-slate-200' },
                 { id: 'pendentes', label: 'Em Andamento', prazo: 'pendentes', status: 'Em andamento', count: emAndamentoCount, color: 'text-blue-600 dark:text-blue-400' },
-                { id: 'atrasadas', label: 'Atrasadas (>7d)', prazo: 'atrasadas', status: '', count: delayedCount, color: 'text-rose-600 dark:text-rose-400' },
-                { id: 'vencendo', label: 'Vencendo', prazo: 'vencendo_breve', status: '', count: vencendoBreveCount, color: 'text-amber-600 dark:text-amber-400' },
+                { id: 'atrasadas', label: `Atrasadas (>${slaSettings.slaDaysWarning}d)`, prazo: 'atrasadas', status: '', count: delayedCount, color: 'text-rose-600 dark:text-rose-400' },
+                { id: 'vencendo', label: `Vencendo (${dueSoonMin}-${slaSettings.slaDaysWarning}d)`, prazo: 'vencendo_breve', status: '', count: vencendoBreveCount, color: 'text-amber-600 dark:text-amber-400' },
                 { id: 'concluidas', label: 'Concluídas', prazo: 'concluidas', status: 'Concluído', count: concluidasCount, color: 'text-emerald-600 dark:text-emerald-400' },
               ].map((tab) => {
                 const isActive =
@@ -437,6 +565,37 @@ export const SCTable: React.FC<SCTableProps> = ({
             )}
           </div>
         </div>
+
+        {/* Active Filter Chips Strip (Shows date range, active search, or custom filters) */}
+        {hasDateFilter && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-xs font-medium shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+              <span>
+                <strong className="font-bold">Período:</strong>{' '}
+                {filters.dataInicio ? formatDateBR(filters.dataInicio) : 'Qualquer data'} até{' '}
+                {filters.dataFim ? formatDateBR(filters.dataFim) : 'Hoje'}{' '}
+                <span className="text-orange-600 text-[11px]">
+                  (
+                  {filters.tipoData === 'conclusao'
+                    ? 'Conclusão'
+                    : filters.tipoData === 'ambas'
+                    ? 'Abertas ou Concluídas'
+                    : 'Abertura'}
+                  )
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={handleClearDateFilter}
+                className="p-0.5 hover:bg-orange-200/80 rounded-full cursor-pointer text-orange-700 ml-0.5 transition-colors"
+                title="Limpar filtro de período"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Collapsible Customization Drawer */}
         <AnimatePresence>
@@ -580,7 +739,7 @@ export const SCTable: React.FC<SCTableProps> = ({
                 {activeFilterCount > 0 && (
                   <button
                     onClick={() =>
-                      onFilterChange({ ...filters, status: '', prazo: 'todos', sort: 'data-desc' })
+                      onFilterChange({ ...filters, status: '', prazo: 'todos', sort: 'numero-desc' })
                     }
                     className="text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 cursor-pointer"
                   >
@@ -641,11 +800,120 @@ export const SCTable: React.FC<SCTableProps> = ({
                     id="ordenarSC"
                     className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c3343] text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-orange-500 min-h-[38px]"
                   >
-                    <option value="data-desc">Mais recentes</option>
-                    <option value="data-asc">Mais antigas</option>
-                    <option value="dias-desc">Maior atraso</option>
-                    <option value="status">Status</option>
+                    <option value="numero-desc">🔢 Número da SC (Decrescente - Padrão)</option>
+                    <option value="numero-asc">🔢 Número da SC (Crescente)</option>
+                    <option value="data-desc">📅 Data mais recente</option>
+                    <option value="data-asc">📅 Data mais antiga</option>
+                    <option value="dias-desc">⏳ Maior atraso / dias em aberto</option>
+                    <option value="solicitante-asc">👤 Solicitante (A → Z)</option>
+                    <option value="solicitante-desc">👤 Solicitante (Z → A)</option>
+                    <option value="status">🏷️ Status</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Date Range Filter Section */}
+              <div className="pt-3 border-t border-slate-200/80 dark:border-slate-700/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Intervalo de Datas (Início e Fim)
+                    </span>
+                  </div>
+                  {hasDateFilter && (
+                    <button
+                      type="button"
+                      onClick={handleClearDateFilter}
+                      className="text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" /> Limpar Período
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Data Inicial */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                      Data Inicial (De)
+                    </label>
+                    <input
+                      type="date"
+                      id="filtroDataInicio"
+                      value={filters.dataInicio || ''}
+                      onChange={(e) => onFilterChange({ ...filters, dataInicio: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c3343] text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-orange-500 min-h-[38px]"
+                    />
+                  </div>
+
+                  {/* Data Final */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                      Data Final (Até)
+                    </label>
+                    <input
+                      type="date"
+                      id="filtroDataFim"
+                      value={filters.dataFim || ''}
+                      onChange={(e) => onFilterChange({ ...filters, dataFim: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c3343] text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-orange-500 min-h-[38px]"
+                    />
+                  </div>
+
+                  {/* Tipo de Data (Abertura / Conclusão / Ambas) */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                      Considerar Data De
+                    </label>
+                    <select
+                      value={filters.tipoData || 'abertura'}
+                      onChange={(e) =>
+                        onFilterChange({
+                          ...filters,
+                          tipoData: e.target.value as FilterOptions['tipoData'],
+                        })
+                      }
+                      id="filtroTipoData"
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c3343] text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-orange-500 min-h-[38px]"
+                    >
+                      <option value="abertura">📅 Data de Abertura (Emissão)</option>
+                      <option value="conclusao">✅ Data de Conclusão (Finalizadas)</option>
+                      <option value="ambas">🔄 Abertas ou Concluídas no período</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Quick Date Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">
+                    Atalhos rápidos:
+                  </span>
+                  {[
+                    { id: 'hoje', label: 'Hoje' },
+                    { id: '7dias', label: 'Últimos 7 dias' },
+                    { id: '30dias', label: 'Últimos 30 dias' },
+                    { id: 'esteMes', label: 'Este Mês' },
+                    { id: 'mesAnterior', label: 'Mês Anterior' },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleDatePreset(p.id as any)}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-600 dark:text-slate-300 hover:border-orange-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50/50 transition-all cursor-pointer shadow-2xs"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  {hasDateFilter && (
+                    <button
+                      type="button"
+                      onClick={handleClearDateFilter}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-all cursor-pointer"
+                    >
+                      Limpar datas
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -659,14 +927,107 @@ export const SCTable: React.FC<SCTableProps> = ({
           <table className="w-full text-left whitespace-nowrap border-collapse min-w-[700px]">
             <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-[#1a1e28] text-slate-600 dark:text-slate-200 font-medium border-b border-slate-200 dark:border-slate-500/50 text-xs shadow-xs">
               <tr>
-                {gridConfig.visibleColumns.numero && <th className="px-4 py-3 font-semibold">SC</th>}
-                {gridConfig.visibleColumns.data && <th className="px-4 py-3 font-semibold">Data</th>}
-                {gridConfig.visibleColumns.solicitante && (
-                  <th className="px-4 py-3 font-semibold">Solicitante</th>
+                {gridConfig.visibleColumns.numero && (
+                  <th
+                    onClick={() => handleSortClick('numero')}
+                    title="Clique para ordenar por número da SC (Decrescente / Crescente)"
+                    className="px-4 py-3 font-semibold cursor-pointer group hover:bg-slate-200/80 dark:hover:bg-slate-700/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          filters.sort === 'numero-desc' || filters.sort === 'numero-asc'
+                            ? 'text-orange-600 dark:text-orange-400 font-bold'
+                            : ''
+                        }
+                      >
+                        SC
+                      </span>
+                      {renderSortIcon('numero')}
+                    </div>
+                  </th>
                 )}
-                {gridConfig.visibleColumns.status && <th className="px-4 py-3 font-semibold">Status</th>}
+                {gridConfig.visibleColumns.data && (
+                  <th
+                    onClick={() => handleSortClick('data')}
+                    title="Clique para ordenar por data"
+                    className="px-4 py-3 font-semibold cursor-pointer group hover:bg-slate-200/80 dark:hover:bg-slate-700/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          filters.sort === 'data-desc' || filters.sort === 'data-asc'
+                            ? 'text-orange-600 dark:text-orange-400 font-bold'
+                            : ''
+                        }
+                      >
+                        Data
+                      </span>
+                      {renderSortIcon('data')}
+                    </div>
+                  </th>
+                )}
+                {gridConfig.visibleColumns.solicitante && (
+                  <th
+                    onClick={() => handleSortClick('solicitante')}
+                    title="Clique para ordenar por solicitante (A-Z)"
+                    className="px-4 py-3 font-semibold cursor-pointer group hover:bg-slate-200/80 dark:hover:bg-slate-700/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          filters.sort === 'solicitante-asc' || filters.sort === 'solicitante-desc'
+                            ? 'text-orange-600 dark:text-orange-400 font-bold'
+                            : ''
+                        }
+                      >
+                        Solicitante
+                      </span>
+                      {renderSortIcon('solicitante')}
+                    </div>
+                  </th>
+                )}
+                {gridConfig.visibleColumns.status && (
+                  <th
+                    onClick={() => handleSortClick('status')}
+                    title="Clique para ordenar por status"
+                    className="px-4 py-3 font-semibold cursor-pointer group hover:bg-slate-200/80 dark:hover:bg-slate-700/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          filters.sort === 'status'
+                            ? 'text-orange-600 dark:text-orange-400 font-bold'
+                            : ''
+                        }
+                      >
+                        Status
+                      </span>
+                      {renderSortIcon('status')}
+                    </div>
+                  </th>
+                )}
                 {gridConfig.visibleColumns.itens && <th className="px-4 py-3 font-semibold">Itens</th>}
-                {gridConfig.visibleColumns.dias && <th className="px-4 py-3 font-semibold">Dias</th>}
+                {gridConfig.visibleColumns.dias && (
+                  <th
+                    onClick={() => handleSortClick('dias')}
+                    title="Clique para ordenar por dias em andamento"
+                    className="px-4 py-3 font-semibold cursor-pointer group hover:bg-slate-200/80 dark:hover:bg-slate-700/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          filters.sort === 'dias-desc' || filters.sort === 'dias-asc'
+                            ? 'text-orange-600 dark:text-orange-400 font-bold'
+                            : ''
+                        }
+                      >
+                        Dias
+                      </span>
+                      {renderSortIcon('dias')}
+                    </div>
+                  </th>
+                )}
                 {gridConfig.visibleColumns.prioridade && (
                   <th className="px-4 py-3 font-semibold">Prioridade</th>
                 )}

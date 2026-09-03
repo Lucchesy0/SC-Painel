@@ -49,6 +49,7 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onLogout?: () => void;
   onOpenDrawer: () => void;
+  onOpenAdd?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -76,6 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onLogout,
   onOpenDrawer,
+  onOpenAdd,
 }) => {
   const [isSCOptionsOpen, setIsSCOptionsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

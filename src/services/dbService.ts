@@ -1,4 +1,4 @@
-import { SC, AuditLogEntry, ThemeMode, Equipment, MainModule, SCItem, ItemStatus } from '../types';
+import { SC, AuditLogEntry, ThemeMode, Equipment, MainModule, SCItem } from '../types';
 import { syncService } from './syncService';
 import {
   saveSCToFirestore,
@@ -79,17 +79,13 @@ export const dbService = {
       usuario: authorName || scData.solicitante || 'Sistema',
     };
 
-    // Normaliza os itens garantindo quantidades e status inicial
+    // Normaliza os itens garantindo quantidades
     const normalizedItens: SCItem[] = (scData.itens || []).map((it) => {
       const qtd = it.quantidadeSolicitada ?? it.quantidade ?? 1;
-      const rec = it.quantidadeRecebida ?? 0;
-      let status: ItemStatus = it.statusItem || (rec >= qtd ? 'Entregue' : rec > 0 ? 'Parcial' : 'Pendente');
       return {
         ...it,
         quantidade: qtd,
         quantidadeSolicitada: qtd,
-        quantidadeRecebida: rec,
-        statusItem: status,
       };
     });
 
@@ -105,11 +101,15 @@ export const dbService = {
       historicoAuditoria: [creationAudit],
     };
 
-    // Salvar primariamente no Firestore
-    await saveSCToFirestore(newSC);
+    // Salvar primariamente no Firestore com tolerância a falhas offline
+    try {
+      await saveSCToFirestore(newSC);
+    } catch (cloudErr) {
+      console.warn('Falha na gravação em nuvem (Firestore), mantendo em cache local seguro:', cloudErr);
+    }
 
     // Cache local de segurança
-    saveSCToIDB(newSC).catch(() => {});
+    await saveSCToIDB(newSC).catch(() => {});
     syncService.broadcast('sc_created', newSC);
     return newSC;
   },
@@ -169,91 +169,15 @@ export const dbService = {
       historicoAuditoria: [newAuditEntry, ...previousHistory],
     };
 
-    // Salvar diretamente no Firebase Firestore
-    await saveSCToFirestore(updatedSC);
+    // Salvar no Firebase Firestore com fallback offline
+    try {
+      await saveSCToFirestore(updatedSC);
+    } catch (cloudErr) {
+      console.warn('Falha na atualização em nuvem (Firestore), mantendo em cache local seguro:', cloudErr);
+    }
 
     // Cache local e sincronização
-    saveSCToIDB(updatedSC).catch(() => {});
-    syncService.broadcast('sc_updated', updatedSC);
-    return updatedSC;
-  },
-
-  /**
-   * Dar entrada / Recebimento parcial ou total de item no Firestore (Almoxarifado)
-   */
-  async receiveItem(
-    scId: string,
-    itemId: string,
-    quantityReceived: number,
-    authorName = 'Almoxarifado'
-  ): Promise<SC | null> {
-    let existing: SC | null = null;
-    try {
-      existing = await getSCFromFirestore(scId);
-    } catch {
-      // ignore
-    }
-    if (!existing) {
-      const all = await getAllSCsFromIDB();
-      existing = all.find((s) => s.id === scId) || null;
-    }
-    if (!existing) return null;
-
-    const timestamp = getFormattedTimestamp();
-    let targetItemName = '';
-    let itemNewStatus: ItemStatus = 'Pendente';
-
-    const updatedItens: SCItem[] = existing.itens.map((it) => {
-      if (it.id === itemId) {
-        targetItemName = it.descricao;
-        const totalReq = it.quantidadeSolicitada ?? it.quantidade ?? 1;
-        const newReceived = Math.max(0, Math.min(totalReq, quantityReceived));
-        const status: ItemStatus =
-          newReceived >= totalReq ? 'Entregue' : newReceived > 0 ? 'Parcial' : 'Pendente';
-        itemNewStatus = status;
-        return {
-          ...it,
-          quantidadeRecebida: newReceived,
-          statusItem: status,
-        };
-      }
-      return it;
-    });
-
-    // Verifica se todos os itens foram recebidos na íntegra
-    const allDelivered = updatedItens.every((it) => {
-      const totalReq = it.quantidadeSolicitada ?? it.quantidade ?? 1;
-      return (it.quantidadeRecebida ?? 0) >= totalReq;
-    });
-
-    const newSCStatus = allDelivered ? 'Concluído' : existing.status;
-
-    const auditEntry: AuditLogEntry = {
-      id: 'aud-' + Math.random().toString(36).substring(2, 9),
-      dataHora: timestamp,
-      tipo: 'Recebimento de Item (Almoxarifado)',
-      descricao: `Item "${targetItemName}" teve recebimento registrado: ${quantityReceived} un (${itemNewStatus})${
-        allDelivered ? ' - Todos os itens entregues, SC concluída automaticamente!' : ''
-      }`,
-      usuario: authorName,
-    };
-
-    const updatedSC: SC = {
-      ...existing,
-      status: newSCStatus,
-      itens: updatedItens,
-      ultimaAlteracao: {
-        dataHora: timestamp,
-        tipo: 'Entrada de Mercadoria',
-        usuario: authorName,
-      },
-      historicoAuditoria: [auditEntry, ...(existing.historicoAuditoria || [])],
-    };
-
-    // Grava no Firestore
-    await saveSCToFirestore(updatedSC);
-
-    saveSCToIDB(updatedSC).catch(() => {});
+    await saveSCToIDB(updatedSC).catch(() => {});
     syncService.broadcast('sc_updated', updatedSC);
     return updatedSC;
   },
@@ -262,8 +186,12 @@ export const dbService = {
    * Salvar SC diretamente com objeto completo no Firestore
    */
   async saveSC(sc: SC): Promise<SC> {
-    await saveSCToFirestore(sc);
-    saveSCToIDB(sc).catch(() => {});
+    try {
+      await saveSCToFirestore(sc);
+    } catch (cloudErr) {
+      console.warn('Falha na gravação em nuvem (Firestore), mantendo em cache local seguro:', cloudErr);
+    }
+    await saveSCToIDB(sc).catch(() => {});
     syncService.broadcast('sc_updated', sc);
     return sc;
   },

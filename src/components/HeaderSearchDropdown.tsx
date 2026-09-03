@@ -11,7 +11,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { SC, Equipment } from '../types';
-import { formatDateBR } from '../utils/storage';
+import { formatDateBR, compareSCNumbers } from '../utils/storage';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface HeaderSearchDropdownProps {
@@ -138,7 +138,7 @@ export const HeaderSearchDropdown: React.FC<HeaderSearchDropdownProps> = ({
         dataMatch ||
         itemsMatch
       );
-    });
+    }).sort((a, b) => compareSCNumbers(a.numero, b.numero, 'desc'));
   }, [scs, searchTerm]);
 
   // Filter Equipments
@@ -153,7 +153,7 @@ export const HeaderSearchDropdown: React.FC<HeaderSearchDropdownProps> = ({
       const brandMatch = removeAccents(eq.marcaModelo || '').includes(term);
       const serialMatch = removeAccents(eq.numeroSerie || '').includes(term);
       const locMatch = removeAccents(eq.localizacao || '').includes(term);
-      const userMatch = removeAccents(eq.usuarioResponsavel || '').includes(term);
+      const userMatch = removeAccents(eq.usuarioResponsavel || eq.responsavel || '').includes(term);
       const statusMatch = removeAccents(eq.status).includes(term);
       const obsMatch = removeAccents(eq.observacoes || '').includes(term);
 
@@ -573,7 +573,7 @@ export const HeaderSearchDropdown: React.FC<HeaderSearchDropdownProps> = ({
 
                       <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
                         <span className="text-[10px] text-slate-400 truncate max-w-[100px]">
-                          {eq.localizacao || eq.usuarioResponsavel || '-'}
+                          {eq.localizacao || eq.responsavel || eq.usuarioResponsavel || '-'}
                         </span>
                         <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5">
                           Abrir <ArrowRight className="w-2.5 h-2.5" />

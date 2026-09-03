@@ -1,13 +1,15 @@
 import React from 'react';
 import { ListFilter, Clock, CheckCircle2, History, AlertTriangle, AlertCircle } from 'lucide-react';
 import { SC } from '../types';
-import { calcDays, isDelayed } from '../utils/storage';
+import { calcDays } from '../utils/storage';
+import { useSlaSettings, isSCDelayed } from '../utils/sla';
 
 interface KPICardsProps {
   scs: SC[];
 }
 
 export const KPICards: React.FC<KPICardsProps> = ({ scs }) => {
+  const slaSettings = useSlaSettings();
   const totalSC = scs.length;
   const concluidas = scs.filter((s) => s.status === 'Concluído').length;
   const emAndamento = totalSC - concluidas;
@@ -25,7 +27,7 @@ export const KPICards: React.FC<KPICardsProps> = ({ scs }) => {
       pendingCount++;
       totalPendingItems += sc.itens.length;
 
-      if (isDelayed(sc.data, sc.status, 7)) {
+      if (isSCDelayed(sc, slaSettings)) {
         delayedCount++;
       }
 
@@ -108,7 +110,7 @@ export const KPICards: React.FC<KPICardsProps> = ({ scs }) => {
         <div className="flex items-center gap-1.5 bg-red-500/10 text-red-700 dark:text-red-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium border border-red-500/20 whitespace-nowrap">
           <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 dark:text-red-400 shrink-0" />
           <span>
-            Atrasadas: <strong id="summaryAtrasadas" className="font-bold">{delayedCount}</strong>
+            Atrasadas (&gt;{slaSettings.slaDaysWarning}d): <strong id="summaryAtrasadas" className="font-bold">{delayedCount}</strong>
           </span>
         </div>
 

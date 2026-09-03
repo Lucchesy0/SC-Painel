@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="14" fill="#ffffff"/>
+  <rect width="64" height="64" rx="14" fill="#ff5500" fill-opacity="0.08" stroke="#ff5500" stroke-width="2" stroke-opacity="0.2"/>
+  <!-- MCM Symbol in High-Definition Vector -->
+  <g transform="translate(6, 10) scale(0.15)">
+    <path
+      d="M 50,75 L 115,28 L 180,75 L 245,28 L 310,75 L 310,165 L 245,212 L 180,165 L 115,212 L 50,165 Z"
+      stroke="#FF5500"
+      stroke-width="36"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <path
+      d="M 50,165 L 180,82 L 255,135 L 255,65 L 180,120 L 105,65 L 105,135 L 180,82"
+      stroke="#FF5500"
+      stroke-width="32"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+</svg>

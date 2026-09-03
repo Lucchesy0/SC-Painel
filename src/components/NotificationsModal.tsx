@@ -19,6 +19,7 @@ import {
   Package,
 } from 'lucide-react';
 import { SC, NotificationSettings } from '../types';
+import { useSlaSettings } from '../utils/sla';
 import {
   calculateSCReminderInfo,
   getNotificationSettings,
@@ -49,6 +50,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   onToast,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('urgentes');
+  const slaSettings = useSlaSettings();
   const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings);
   const [permissionState, setPermissionState] = useState<NotificationPermission | 'unsupported'>('default');
 
@@ -60,8 +62,8 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   }, [isOpen]);
 
   const reminders = useMemo(() => {
-    return scs.map((sc) => calculateSCReminderInfo(sc, settings.notifyDueSoonDays));
-  }, [scs, settings.notifyDueSoonDays]);
+    return scs.map((sc) => calculateSCReminderInfo(sc, settings.notifyDueSoonDays, slaSettings));
+  }, [scs, settings.notifyDueSoonDays, slaSettings]);
 
   // Grupos
   const overdueList = useMemo(() => reminders.filter((r) => r.urgency === 'atrasada'), [reminders]);

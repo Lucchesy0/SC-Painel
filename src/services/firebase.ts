@@ -41,6 +41,33 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+/**
+ * Deeply sanitizes an object/array removing any `undefined` values so Firestore setDoc never fails
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === undefined) {
+    return null as any;
+  }
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as any;
+  }
+  const cleanObj: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      const sanitized = sanitizeForFirestore(value);
+      if (sanitized !== undefined) {
+        cleanObj[key] = sanitized;
+      }
+    }
+  }
+  return cleanObj as T;
+}
+
 export interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
@@ -255,7 +282,8 @@ export async function saveSCToFirestore(sc: SC): Promise<void> {
   try {
     setCloudSyncStatus('syncing');
     const docRef = doc(db, SCS_COLLECTION, sc.id);
-    await setDoc(docRef, sc, { merge: true });
+    const cleanData = sanitizeForFirestore(sc);
+    await setDoc(docRef, cleanData, { merge: true });
     setCloudSyncStatus('connected');
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${SCS_COLLECTION}/${sc.id}`);
@@ -293,7 +321,7 @@ export async function bulkUploadSCsToFirestore(scs: SC[]): Promise<void> {
       const batch = writeBatch(db);
       chunk.forEach((sc) => {
         const docRef = doc(db, SCS_COLLECTION, sc.id);
-        batch.set(docRef, sc, { merge: true });
+        batch.set(docRef, sanitizeForFirestore(sc), { merge: true });
       });
       await batch.commit();
     }
@@ -349,7 +377,7 @@ export async function fetchAllEquipmentsFromFirestore(): Promise<Equipment[]> {
 export async function saveEquipmentToFirestore(eq: Equipment): Promise<void> {
   try {
     const docRef = doc(db, EQUIPMENTS_COLLECTION, eq.id);
-    await setDoc(docRef, eq, { merge: true });
+    await setDoc(docRef, sanitizeForFirestore(eq), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${EQUIPMENTS_COLLECTION}/${eq.id}`);
     throw err;
@@ -378,7 +406,7 @@ export async function bulkUploadEquipmentsToFirestore(equipments: Equipment[]): 
     const batch = writeBatch(db);
     equipments.forEach((eq) => {
       const docRef = doc(db, EQUIPMENTS_COLLECTION, eq.id);
-      batch.set(docRef, eq, { merge: true });
+      batch.set(docRef, sanitizeForFirestore(eq), { merge: true });
     });
     await batch.commit();
   } catch (err) {
@@ -428,7 +456,7 @@ export async function fetchSettingFromFirestore<T>(key: string): Promise<T | nul
 export async function saveSettingToFirestore<T>(key: string, value: T): Promise<void> {
   try {
     const docRef = doc(db, SETTINGS_COLLECTION, key);
-    await setDoc(docRef, { key, value, updatedAt: new Date().toISOString() }, { merge: true });
+    await setDoc(docRef, sanitizeForFirestore({ key, value, updatedAt: new Date().toISOString() }), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${SETTINGS_COLLECTION}/${key}`);
   }
@@ -488,7 +516,7 @@ export async function fetchAllUsersFromFirestore(): Promise<UserProfile[]> {
 export async function saveUserToFirestore(user: UserProfile): Promise<void> {
   try {
     const docRef = doc(db, USERS_COLLECTION, user.id);
-    await setDoc(docRef, user, { merge: true });
+    await setDoc(docRef, sanitizeForFirestore(user), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${USERS_COLLECTION}/${user.id}`);
     throw err;
@@ -520,7 +548,7 @@ export async function seedInitialUsersToFirestore(defaultUsers: UserProfile[]): 
     const batch = writeBatch(db);
     defaultUsers.forEach((u) => {
       const docRef = doc(db, USERS_COLLECTION, u.id);
-      batch.set(docRef, u);
+      batch.set(docRef, sanitizeForFirestore(u));
     });
     await batch.commit();
     return defaultUsers;

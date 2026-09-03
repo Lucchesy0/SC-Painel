@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { SC, GridConfig, RolePermissions } from '../types';
 import { calcDays, formatDateBR } from '../utils/storage';
-import { calculateSCReminderInfo } from '../services/notificationService';
+import { useSlaSettings, isSCDelayed, isSCDueSoon, isSCCriticalOverdue, calculateSCReminderInfo } from '../utils/sla';
 import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
 
 interface SCRowItemProps {
@@ -45,24 +45,19 @@ export const SCRowItem: React.FC<SCRowItemProps> = memo(
     onMouseLeave,
   }) => {
     const [isCompletingAnim, setIsCompletingAnim] = useState(false);
+    const slaSettings = useSlaSettings();
     const dias = calcDays(sc.data, sc.status);
-    const reminder = calculateSCReminderInfo(sc);
-    const isAtrasada = sc.status !== 'Concluído' && (reminder.urgency === 'atrasada' || dias > 7);
+    const reminder = calculateSCReminderInfo(sc, undefined, slaSettings);
+    const isAtrasada = sc.status !== 'Concluído' && (reminder.urgency === 'atrasada' || isSCDelayed(sc, slaSettings));
     const isHoje = sc.status !== 'Concluído' && reminder.urgency === 'hoje';
     const isBreve =
-      sc.status !== 'Concluído' && (reminder.urgency === 'breve' || (dias >= 5 && dias <= 7));
+      sc.status !== 'Concluído' && (reminder.urgency === 'breve' || isSCDueSoon(sc, slaSettings));
     const hasImages = sc.itens.some((i) => !!i.imageUrl);
 
     const canEdit = permissions?.canEditSC ?? true;
     const canDelete = permissions?.canDeleteSC ?? true;
 
-    // Delivery stats
     const totalItensCount = sc.itens.length;
-    const deliveredCount = sc.itens.filter(
-      (it) => (it.quantidadeRecebida ?? 0) >= (it.quantidadeSolicitada ?? it.quantidade ?? 1)
-    ).length;
-    const isAllDelivered = totalItensCount > 0 && deliveredCount === totalItensCount;
-    const isPartialDelivered = deliveredCount > 0 && !isAllDelivered;
 
     const handleStatusToggle = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -109,40 +104,11 @@ export const SCRowItem: React.FC<SCRowItemProps> = memo(
               >
                 {sc.numero}
                 {hasImages && (
-                  <ImageIcon
-                    className="w-3.5 h-3.5 text-slate-400 hover:text-orange-500"
-                    title="Contém fotos/links anexados"
-                  />
+                  <span title="Contém fotos/links anexados">
+                    <ImageIcon className="w-3.5 h-3.5 text-slate-400 hover:text-orange-500" />
+                  </span>
                 )}
               </button>
-
-              {isAtrasada && (
-                <span
-                  title={reminder.mensagem}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700/80 shadow-2xs shrink-0 animate-pulse"
-                >
-                  <AlertTriangle className="w-3 h-3 text-red-600 dark:text-red-400" />
-                  ATRASADA
-                </span>
-              )}
-              {isHoje && (
-                <span
-                  title="Solicitação com vencimento para hoje!"
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 shadow-2xs shrink-0 animate-pulse"
-                >
-                  <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                  VENCE HOJE
-                </span>
-              )}
-              {isBreve && !isHoje && (
-                <span
-                  title={reminder.mensagem}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-orange-100 dark:bg-orange-950/80 text-orange-800 dark:text-orange-200 border border-orange-300 dark:border-orange-700/80 shadow-2xs shrink-0"
-                >
-                  <Clock className="w-3 h-3 text-orange-600 dark:text-orange-400" />
-                  VENCE {reminder.diasRestantes}D
-                </span>
-              )}
             </div>
           </td>
         )}
@@ -177,7 +143,7 @@ export const SCRowItem: React.FC<SCRowItemProps> = memo(
               disabled={!canEdit}
               title={
                 !canEdit
-                  ? 'Somente Comprador ou Almoxarifado podem alterar status'
+                  ? 'Somente Comprador ou Administrador podem alterar status'
                   : sc.status === 'Concluído'
                   ? 'Concluída! Clique para reabrir'
                   : 'Clique para concluir a solicitação'
@@ -248,28 +214,12 @@ export const SCRowItem: React.FC<SCRowItemProps> = memo(
           </td>
         )}
 
-        {/* Items count & delivery progress */}
+        {/* Items count */}
         {gridConfig.visibleColumns.itens && (
           <td className={`${cellPadding} text-slate-600 dark:text-slate-400 font-medium`}>
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {totalItensCount} item(ns)
-              </span>
-              {totalItensCount > 0 && (
-                <span
-                  title={`${deliveredCount} de ${totalItensCount} itens entregues no almoxarifado`}
-                  className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-sm ${
-                    isAllDelivered
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      : isPartialDelivered
-                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {deliveredCount}/{totalItensCount}
-                </span>
-              )}
-            </div>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">
+              {totalItensCount} item(ns)
+            </span>
           </td>
         )}
 

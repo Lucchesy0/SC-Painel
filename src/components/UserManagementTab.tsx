@@ -93,7 +93,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
   // Sugestões rápidas de preenchimento de cargo para agilidade do usuário
   const cargoSuggestions = [
     'Comprador',
-    'Almoxarifado / Recebimento',
     'Analista de Suprimentos',
     'Coordenador de TI',
     'Técnico de Campo',
@@ -142,7 +141,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
   };
 
   // Presets rápidos opcionais (para preencher checkboxes com 1 clique se o admin desejar)
-  const applyPreset = (type: 'total' | 'compras' | 'almoxarife' | 'ti' | 'consulta') => {
+  const applyPreset = (type: 'total' | 'compras' | 'ti' | 'consulta') => {
     if (type === 'total') {
       setFormData((prev) => ({ ...prev, permissions: { ...ADMIN_USER_PERMISSIONS } }));
     } else if (type === 'compras') {
@@ -154,23 +153,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
           canCreateSC: true,
           canEditSC: true,
           canDeleteSC: false,
-          canReceiveItems: true,
           canAccessAnalytics: true,
-          canExportReports: true,
-        },
-      }));
-    } else if (type === 'almoxarife') {
-      setFormData((prev) => ({
-        ...prev,
-        permissions: {
-          ...DEFAULT_USER_PERMISSIONS,
-          canAccessSC: true,
-          canCreateSC: false,
-          canEditSC: false,
-          canDeleteSC: false,
-          canReceiveItems: true,
-          canAccessInventario: true,
-          canManageEquipments: true,
           canExportReports: true,
         },
       }));
@@ -198,7 +181,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
           canCreateSC: false,
           canEditSC: false,
           canDeleteSC: false,
-          canReceiveItems: false,
           canManageEquipments: false,
           canExportReports: true,
           canImportData: false,
@@ -371,11 +353,11 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => applyPreset('almoxarife')}
-            className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium cursor-pointer"
-            title="Configurar foco em Almoxarifado e Recebimento"
+            onClick={() => applyPreset('ti')}
+            className="px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 font-medium cursor-pointer"
+            title="Configurar foco em Inventário de TI"
           >
-            Almoxarifado
+            TI
           </button>
           <button
             type="button"
@@ -483,16 +465,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
               />
               <span className="text-red-700 font-medium">Excluir Solicitações</span>
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={formData.permissions.canReceiveItems}
-                onChange={() => handleTogglePermission('canReceiveItems')}
-                className="w-3.5 h-3.5 rounded text-slate-900 focus:ring-slate-900"
-              />
-              <span>Recebimento / Almoxarifado</span>
             </label>
           </div>
         </div>
@@ -700,14 +672,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                               >
                                 <BarChart2 className="w-3 h-3 text-blue-500 shrink-0" />
                                 <span>Gráficos</span>
-                              </span>
-                            )}
-                            {perms.canReceiveItems && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80 whitespace-nowrap shrink-0"
-                                title="Permissão para registrar Recebimento de Itens no Almoxarifado"
-                              >
-                                <span>Recebimento</span>
                               </span>
                             )}
                             {perms.canDeleteSC && (

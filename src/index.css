@@ -12,6 +12,15 @@
     color-scheme: dark;
   }
 
+  /* Renderização nativa 100% com densidade calibrada via tokens de espaçamento */
+  html {
+    font-size: 100%;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   html, body, #root {
     width: 100%;
     max-width: 100vw;
@@ -24,23 +33,33 @@
   }
 
   /* Permitir seleção apenas dentro de inputs, textareas e tabelas */
-  input, textarea, [contenteditable="true"] {
+  input, textarea, [contenteditable="true"], table {
     -webkit-user-select: auto;
   }
 
-  /* Previne o zoom automático indesejado no iPhone ao clicar em campos de formulário */
+  /* Previne zoom acidental no iOS mantendo a densidade de botões e campos */
   @media screen and (max-width: 768px) {
-    input,
-    select,
-    textarea,
-    button {
+    input:focus,
+    select:focus,
+    textarea:focus {
       font-size: 16px !important;
     }
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 transition-colors duration-200 dark:bg-[#202532] dark:text-slate-100 overflow-x-hidden;
+    @apply bg-[#eff1f4] text-slate-800 transition-colors duration-200 dark:bg-[#202532] dark:text-slate-100 overflow-x-hidden;
     touch-action: pan-x pan-y;
+  }
+
+  /* Regras de densidade e proporcionalidade para controles e dados */
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  /* Inputs, selects e textareas com proporção ergonômica em 100% */
+  input, select, textarea {
+    letter-spacing: -0.01em;
   }
 
   /* Illuminated inputs, selects and textareas in dark mode */

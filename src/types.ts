@@ -1,7 +1,5 @@
 export type SCStatus = 'Em andamento' | 'Concluído';
 
-export type ItemStatus = 'Pendente' | 'Parcial' | 'Entregue';
-
 export type UserRole = string;
 
 export interface UserPermissions {
@@ -16,7 +14,6 @@ export interface UserPermissions {
   canCreateSC: boolean;          // Criar novas Solicitações
   canEditSC: boolean;            // Editar Solicitações existentes
   canDeleteSC: boolean;          // Excluir Solicitações
-  canReceiveItems: boolean;      // Registrar recebimento de itens no almoxarifado
 
   // Ações de TI / Inventário
   canManageEquipments: boolean;  // Adicionar, editar ou desativar equipamentos
@@ -63,7 +60,7 @@ export type ActiveNavTab = 'solicitacoes' | 'indicadores' | 'graficos' | 'invent
 
 export type ActiveTab = 'principal' | 'dashboards' | 'lista';
 
-export type EquipmentStatus = 'Ativado' | 'Desativado' | 'Manutenção';
+export type EquipmentStatus = 'Ativado' | 'Desativado' | 'Manutenção' | 'Em Uso' | 'Disponível';
 
 export interface EquipmentMaintenanceRecord {
   id: string;
@@ -88,6 +85,7 @@ export interface Equipment {
   dataManutencao?: string;
   numeroSerie?: string; // Serial / Service Tag
   responsavel?: string; // Colaborador / Depto atribuído
+  usuarioResponsavel?: string; // Alias para compatibilidade
   ipAddress?: string; // IP / MAC / Hostname
   dataAquisicao?: string; // Data de aquisição / tombamento
   historicoManutencao?: EquipmentMaintenanceRecord[];
@@ -100,8 +98,6 @@ export interface SCItem {
   destino: string;
   quantidade?: number; // Qtd Solicitada
   quantidadeSolicitada?: number;
-  quantidadeRecebida?: number; // Qtd já entregue/recebida no almoxarifado
-  statusItem?: ItemStatus; // 'Pendente' | 'Parcial' | 'Entregue'
   fornecedor?: string;
   valorUnitario?: number;
   previsaoEntrega?: string;
@@ -130,8 +126,13 @@ export interface SC {
   projeto?: string;
   status: SCStatus;
   itens: SCItem[];
+  observacoes?: string; // Comentário / Observações gerais da Solicitação (opcional)
+  comentarios?: string; // Sinônimo para observações
   prioridade?: 'Baixa' | 'Média' | 'Alta' | 'Urgente';
   dataVencimento?: string; // YYYY-MM-DD (Data Limite / Prazo de Entrega)
+  diasEmAberto?: number;
+  prazoStatus?: string;
+  empresaOuProjeto?: string;
   anexos?: string[]; // Support for direct image URLs / document links attached to SC
   ultimaAlteracao?: {
     dataHora: string;
@@ -147,7 +148,19 @@ export interface FilterOptions {
   search: string;
   status: string;
   prazo: 'todos' | 'pendentes' | 'concluidas' | 'atrasadas' | 'vencendo_breve';
-  sort: 'data-desc' | 'data-asc' | 'dias-desc' | 'status';
+  sort:
+    | 'numero-desc'
+    | 'numero-asc'
+    | 'data-desc'
+    | 'data-asc'
+    | 'dias-desc'
+    | 'dias-asc'
+    | 'solicitante-asc'
+    | 'solicitante-desc'
+    | 'status';
+  dataInicio?: string; // YYYY-MM-DD
+  dataFim?: string; // YYYY-MM-DD
+  tipoData?: 'abertura' | 'conclusao' | 'ambas'; // 'abertura' (padrão), 'conclusao' ou 'ambas'
 }
 
 export type SCReminderUrgency = 'atrasada' | 'hoje' | 'breve' | 'normal' | 'concluida';
@@ -166,6 +179,19 @@ export interface NotificationSettings {
   notifyOverdue: boolean;
   soundEnabled: boolean;
   lastCheckedDate?: string;
+}
+
+export interface SlaPrioritySettings {
+  Urgente: number;
+  Alta: number;
+  Média: number;
+  Baixa: number;
+}
+
+export interface SlaSettings {
+  slaDaysWarning: number;
+  criticalOverdueDays: number;
+  priorities?: SlaPrioritySettings;
 }
 
 export interface ToastMessage {

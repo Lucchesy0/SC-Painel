@@ -7,11 +7,12 @@ import {
   ArrowRight,
   Filter,
   Plus,
+  Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SC, ThemeMode, FilterOptions, ToastMessage, Equipment, ActiveNavTab, AuditLogEntry, UserProfile, CloudSyncStatus } from './types';
-import { exportToCSV, isDelayed, calcDays } from './utils/storage';
-import { calculateSCReminderInfo } from './services/notificationService';
+import { exportToCSV, calcDays } from './utils/storage';
+import { useSlaSettings, isSCDelayed, isSCDueSoon, calculateSCReminderInfo } from './utils/sla';
 import { dbService } from './services/dbService';
 import { syncService } from './services/syncService';
 import { authService, getRoleLabel } from './services/authService';
@@ -111,7 +112,10 @@ export default function App() {
     search: '',
     status: '',
     prazo: 'todos',
-    sort: 'data-desc',
+    sort: 'numero-desc',
+    dataInicio: '',
+    dataFim: '',
+    tipoData: 'abertura',
   });
 
   // Modal / Drawer visibility states
@@ -137,7 +141,7 @@ export default function App() {
     setToasts((prev) => [...prev, { id, text, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 2200);
   };
 
   // Apply light theme only
@@ -399,20 +403,21 @@ export default function App() {
   const handleSaveSC = async (scData: Omit<SC, 'id'>, id?: string) => {
     try {
       if (id) {
-        const updated = await dbService.updateSC(id, scData);
+        const updated = await dbService.updateSC(id, scData, currentUser?.nome);
         setScs((prev) => prev.map((s) => (s.id === id ? updated : s)));
         showToast('SC atualizada com sucesso!', 'success');
         if (selectedSC?.id === id) {
           setSelectedSC(updated);
         }
       } else {
-        const created = await dbService.createSC(scData);
+        const created = await dbService.createSC(scData, currentUser?.nome);
         setScs((prev) => [created, ...prev]);
         showToast('SC adicionada com sucesso!', 'success');
       }
       setIsModalOpen(false);
     } catch (err) {
-      showToast('Erro ao salvar SC.', 'error');
+      console.error('Erro ao salvar SC:', err);
+      showToast('Erro ao salvar SC: ' + (err instanceof Error ? err.message : 'Falha na gravação'), 'error');
     }
   };
 
@@ -470,20 +475,6 @@ export default function App() {
     showToast(`Perfil ativo: ${user.nome} (${user.role})`, 'info');
   };
 
-  const handleReceiveItem = async (scId: string, itemId: string, newReceivedQty: number) => {
-    try {
-      const updatedSC = await dbService.receiveItem(scId, itemId, newReceivedQty, currentUser.nome);
-      setScs((prev) => prev.map((s) => (s.id === scId ? updatedSC : s)));
-      if (selectedSC?.id === scId) {
-        setSelectedSC(updatedSC);
-      }
-      showToast('Entrada do produto registrada no Almoxarifado!', 'success');
-    } catch (err) {
-      console.error('Erro ao dar entrada no item:', err);
-      showToast('Erro ao registrar recebimento do produto.', 'error');
-    }
-  };
-
   const handleConfirmDelete = async () => {
     if (!deleteConfirmId) return;
     try {
@@ -505,6 +496,9 @@ export default function App() {
       status: '',
       prazo: 'todos',
       sort: 'data-desc',
+      dataInicio: '',
+      dataFim: '',
+      tipoData: 'abertura',
     });
     showToast('Filtros limpos.', 'info');
   };
@@ -598,22 +592,21 @@ export default function App() {
     setSelectedEq(null);
   };
 
-  const delayedCount = scs.filter((s) => isDelayed(s.data, s.status, 7)).length;
+  const slaSettings = useSlaSettings();
+  const dueSoonMin = Math.max(1, Math.round(slaSettings.slaDaysWarning * 0.6));
+
+  const delayedCount = scs.filter((s) => s.status !== 'Concluído' && isSCDelayed(s, slaSettings)).length;
   const concluidasCount = scs.filter((s) => s.status === 'Concluído').length;
   const emAndamentoCount = scs.length - concluidasCount;
   const completionRate = scs.length > 0 ? Math.round((concluidasCount / scs.length) * 100) : 0;
-  const vencendoBreveCount = scs.filter((s) => {
-    if (s.status === 'Concluído') return false;
-    const d = calcDays(s.data, s.status);
-    return d >= 4 && d <= 7;
-  }).length;
+  const vencendoBreveCount = scs.filter((s) => s.status !== 'Concluído' && isSCDueSoon(s, slaSettings)).length;
   const openSCs = scs.filter((s) => s.status === 'Em andamento');
   const totalOpenDays = openSCs.reduce((acc, s) => acc + calcDays(s.data, s.status), 0);
   const avgDays = openSCs.length > 0 ? Math.round(totalOpenDays / openSCs.length) : 0;
 
   const reminders = useMemo(() => {
-    return scs.map((sc) => calculateSCReminderInfo(sc));
-  }, [scs]);
+    return scs.map((sc) => calculateSCReminderInfo(sc, undefined, slaSettings));
+  }, [scs, slaSettings]);
 
   const urgentNotificationsCount = useMemo(() => {
     return reminders.filter(
@@ -711,12 +704,13 @@ export default function App() {
         currentUser={currentUser}
         onClose={handleLogout}
         onLogout={handleLogout}
+        onRefresh={handleRefreshLive}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans transition-colors duration-200 overflow-x-hidden w-full max-w-full">
+    <div className="min-h-screen bg-[#eff1f4] text-slate-900 flex flex-col font-sans transition-colors duration-200 overflow-x-hidden w-full max-w-full">
       {/* Unified Top Navigation Bar */}
       <Header
         activeNavTab={activeNavTab}
@@ -923,12 +917,12 @@ export default function App() {
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-300 mt-3 leading-relaxed">
                       {delayedCount > 0
-                        ? `Atenção: Existem ${delayedCount} solicitações em aberto há mais de 7 dias úteis sem conclusão.`
-                        : 'Excelente! Todas as solicitações em andamento estão dentro do prazo estipulado de 7 dias.'}
+                        ? `Atenção: Existem ${delayedCount} solicitações em aberto há mais de ${slaSettings.slaDaysWarning} dias úteis sem conclusão.`
+                        : `Excelente! Todas as solicitações em andamento estão dentro do prazo estipulado de ${slaSettings.slaDaysWarning} dias.`}
                     </p>
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700/50 text-xs">
                       <div>
-                        <span className="text-slate-400 block">Vencendo em Breve (4-7d)</span>
+                        <span className="text-slate-400 block">Vencendo em Breve ({dueSoonMin}-{slaSettings.slaDaysWarning}d)</span>
                         <span className="text-base font-mono font-bold text-amber-600 dark:text-amber-400">
                           {vencendoBreveCount}
                         </span>
@@ -944,7 +938,7 @@ export default function App() {
 
                   <button
                     onClick={() => {
-                      setFilters((prev) => ({ ...prev, status: 'Em andamento', prazo: 'delayed' }));
+                      setFilters((prev) => ({ ...prev, status: 'Em andamento', prazo: 'atrasadas' }));
                       handleNavTabChange('solicitacoes');
                     }}
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 pt-2 border-t border-slate-100 dark:border-slate-700/50 cursor-pointer self-start"
@@ -1019,6 +1013,8 @@ export default function App() {
       <SCModal
         isOpen={isModalOpen}
         editingSC={editingSC}
+        users={teamUsers}
+        currentUser={currentUser}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveSC}
         onToast={showToast}
@@ -1032,7 +1028,6 @@ export default function App() {
         onEdit={(sc) => handleOpenEdit(sc)}
         onDelete={(id) => setDeleteConfirmId(id)}
         onToggleStatus={handleToggleSCStatus}
-        onReceiveItem={handleReceiveItem}
       />
 
       <ConfirmModal
@@ -1242,7 +1237,7 @@ export default function App() {
         onLogout={handleLogout}
         onFilterDelayed={() => {
           handleNavTabChange('solicitacoes');
-          setFilters((prev) => ({ ...prev, status: 'Em andamento', prazo: 'delayed' }));
+          setFilters((prev) => ({ ...prev, status: 'Em andamento', prazo: 'atrasadas' }));
           showToast('Exibindo solicitações atrasadas', 'info');
         }}
         onExportAllCSV={() => {
@@ -1257,6 +1252,7 @@ export default function App() {
           <KioskModeView
             scs={scs}
             onClose={() => setIsKioskOpen(false)}
+            onRefresh={handleRefreshLive}
           />
         )}
       </AnimatePresence>

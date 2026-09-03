@@ -3,7 +3,8 @@ import { SC } from '../types';
 import { KPICards } from './KPICards';
 import { StatusChart } from './StatusChart';
 import { DepartmentChart } from './DepartmentChart';
-import { calcDays, isDelayed } from '../utils/storage';
+import { calcDays } from '../utils/storage';
+import { useSlaSettings, isSCDelayed } from '../utils/sla';
 import { BarChart3, AlertCircle, TrendingUp, Clock, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface AnalyticsViewProps {
@@ -11,6 +12,7 @@ interface AnalyticsViewProps {
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ scs }) => {
+  const slaSettings = useSlaSettings();
   const total = scs.length;
 
   // Priorities breakdown
@@ -28,7 +30,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ scs }) => {
   const finishedSCs = scs.filter((s) => s.status === 'Concluído');
   const finishedCount = finishedSCs.length;
   const inProgressSCs = scs.filter((s) => s.status !== 'Concluído');
-  const delayedCount = inProgressSCs.filter((s) => isDelayed(s.data, s.status, 7)).length;
+  const delayedCount = inProgressSCs.filter((s) => isSCDelayed(s, slaSettings)).length;
 
   // Average days in progress for open SCs
   const totalOpenDays = inProgressSCs.reduce((acc, s) => acc + calcDays(s.data, s.status), 0);
@@ -175,7 +177,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ scs }) => {
                 <TrendingUp className="w-4 h-4 text-emerald-500" /> Desempenho do Processo de Compras
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Indicadores de tempo de ciclo e conformidade com o prazo de 7 dias
+                Indicadores de tempo de ciclo e conformidade com o prazo de {slaSettings.slaDaysWarning} dias
               </p>
             </div>
           </div>
@@ -206,7 +208,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ scs }) => {
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#202532] border border-slate-100 dark:border-slate-700/60">
               <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
-                <span>Fora do Prazo (&gt;7d)</span>
+                <span>Fora do Prazo (&gt;{slaSettings.slaDaysWarning}d)</span>
               </div>
               <span className="text-2xl font-black font-mono text-red-600 dark:text-red-400">
                 {delayedCount}
