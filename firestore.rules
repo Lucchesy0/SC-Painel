@@ -21,6 +21,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Regra para Termos de Responsabilidade de TI
+    match /responsibility_terms/{termId} {
+      allow read, write: if true;
+    }
+
     // Default safety catch-all
     match /{document=**} {
       allow read, write: if false;

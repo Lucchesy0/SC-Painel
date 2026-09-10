@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShoppingCart,
   BarChart3,
@@ -10,7 +10,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SC, ThemeMode, FilterOptions, ToastMessage, Equipment, ActiveNavTab, AuditLogEntry, UserProfile, CloudSyncStatus } from './types';
+import { SC, ThemeMode, FilterOptions, ToastMessage, Equipment, ActiveNavTab, AuditLogEntry, UserProfile, CloudSyncStatus, ResponsibilityTerm } from './types';
 import { exportToCSV, calcDays } from './utils/storage';
 import { useSlaSettings, isSCDelayed, isSCDueSoon, calculateSCReminderInfo } from './utils/sla';
 import { dbService } from './services/dbService';
@@ -19,10 +19,12 @@ import { authService, getRoleLabel } from './services/authService';
 import {
   subscribeToFirestoreSCs,
   subscribeToFirestoreEquipments,
+  subscribeToFirestoreTerms,
   subscribeToSyncStatus,
   testFirestoreConnection,
   fetchAllSCsFromFirestore,
   fetchAllEquipmentsFromFirestore,
+  saveUserToFirestore,
 } from './services/firebase';
 import { Header } from './components/Header';
 import { KPICards } from './components/KPICards';
@@ -36,6 +38,7 @@ import { StatusChart } from './components/StatusChart';
 import { DepartmentChart } from './components/DepartmentChart';
 import { AnalyticsView } from './components/AnalyticsView';
 import { InventoryView } from './components/InventoryView';
+import { ResponsibilityTermsView } from './components/ResponsibilityTermsView';
 import { AdminModal, AdminTab } from './components/AdminModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { NotificationsModal } from './components/NotificationsModal';
@@ -93,9 +96,34 @@ export default function App() {
   const permissions = useMemo(() => authService.getPermissions(currentUser), [currentUser]);
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('connected');
 
+  // Ajusta a aba ativa automaticamente se o usuário não tiver permissão para a aba atual
+  useEffect(() => {
+    if (permissions.canAccessAdmin) return;
+    if (!permissions.canAccessSC && (activeNavTab === 'solicitacoes' || activeNavTab === 'indicadores' || activeNavTab === 'graficos')) {
+      if (permissions.canAccessInventario) {
+        setActiveNavTab('inventario');
+      } else if (permissions.canAccessTermos) {
+        setActiveNavTab('termo-responsabilidade');
+      }
+    } else if (!permissions.canAccessInventario && activeNavTab === 'inventario') {
+      if (permissions.canAccessTermos) {
+        setActiveNavTab('termo-responsabilidade');
+      } else if (permissions.canAccessSC) {
+        setActiveNavTab('solicitacoes');
+      }
+    } else if (!permissions.canAccessTermos && activeNavTab === 'termo-responsabilidade') {
+      if (permissions.canAccessInventario) {
+        setActiveNavTab('inventario');
+      } else if (permissions.canAccessSC) {
+        setActiveNavTab('solicitacoes');
+      }
+    }
+  }, [permissions, activeNavTab]);
+
   // Core Data
   const [scs, setScs] = useState<SC[]>([]);
   const [equipments, setEquipments] = useState<Equipment[]>([]);
+  const [terms, setTerms] = useState<ResponsibilityTerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>(() =>
@@ -228,11 +256,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDrawerOpen, isGlobalSearchOpen, isNotificationsOpen, isEditProfileOpen, isSettingsOpen, isModalOpen, isEqModalOpen, selectedSC, selectedEq, isAdminOpen, isUsersModalOpen, deleteConfirmId, activeNavTab]);
 
-  // Background sync helper function
+  // Função para abrir o dropdown de equipe sofisticado no header
+  const handleOpenTeamDropdown = () => {
+    window.dispatchEvent(new CustomEvent('open-team-dropdown'));
+  };
   const performBackgroundSync = async (notifyUser = false) => {
     try {
       const scData = await dbService.getSCs();
       const eqData = await dbService.getEquipments();
+      const termData = await dbService.getTerms();
       const { list: normalized, changed } = normalizeSCList(scData);
 
       if (changed > 0) {
@@ -242,6 +274,7 @@ export default function App() {
         setScs(scData);
       }
       setEquipments(eqData);
+      setTerms(termData);
 
       const timeFormatted = new Date().toLocaleTimeString('pt-BR', {
         hour: '2-digit',
@@ -305,6 +338,10 @@ export default function App() {
       setEquipments(cloudEqs);
     });
 
+    const unsubTerms = subscribeToFirestoreTerms((cloudTerms) => {
+      setTerms(cloudTerms);
+    });
+
     const unsubUsers = authService.subscribeUsers((cloudUsers) => {
       setTeamUsers(cloudUsers);
     });
@@ -338,6 +375,7 @@ export default function App() {
       unsubStatus();
       unsubSCs();
       unsubEqs();
+      unsubTerms();
       unsubUsers();
       unsubBroadcast();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -345,6 +383,48 @@ export default function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Heartbeat de Presença (Online / Offline) em tempo real do Usuário Ativo
+  useEffect(() => {
+    if (!currentUser || !currentUser.id || currentUser.id === 'usr-quiosque') return;
+
+    let isSubscribed = true;
+
+    const updatePresence = async (status: boolean) => {
+      try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        await saveUserToFirestore({
+          ...currentUser,
+          isOnline: status,
+          lastSeen: new Date().toISOString(),
+        });
+      } catch {
+        // Silencioso se conexão de rede oscilar
+      }
+    };
+
+    // Marca imediatamente como online ao autenticar/iniciar sessão
+    updatePresence(true);
+
+    // Heartbeat periódico (a cada 60 segundos) para manter status ativo
+    const heartbeatInterval = setInterval(() => {
+      if (isSubscribed) {
+        updatePresence(true);
+      }
+    }, 60000);
+
+    const handleBeforeUnload = () => {
+      updatePresence(false);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentUser?.id]);
 
   // Live Refresh handler across the entire app (manual trigger via Firestore)
   const handleRefreshLive = async () => {
@@ -389,16 +469,36 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // SC Handlers
-  const handleOpenAdd = () => {
+  // SC Handlers memoized with useCallback
+  const handleSelectSC = useCallback((sc: SC) => {
+    setSelectedSC(sc);
+  }, []);
+
+  const handleDeleteSCConfirm = useCallback((id: string) => {
+    setDeleteConfirmId(id);
+  }, []);
+
+  const handleOpenImportRM = useCallback(() => {
+    setIsRMImportOpen(true);
+  }, []);
+
+  const handleExportCSV = useCallback(() => {
+    exportToCSV(scs);
+  }, [scs]);
+
+  const handleOpenKioskMode = useCallback(() => {
+    setIsKioskOpen(true);
+  }, []);
+
+  const handleOpenAdd = useCallback(() => {
     setEditingSC(null);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleOpenEdit = (sc: SC) => {
+  const handleOpenEdit = useCallback((sc: SC) => {
     setEditingSC(sc);
     setIsModalOpen(true);
-  };
+  }, []);
 
   const handleSaveSC = async (scData: Omit<SC, 'id'>, id?: string) => {
     try {
@@ -422,7 +522,7 @@ export default function App() {
   };
 
   // Quick interactive toggle for SC status with sensory feedback
-  const handleToggleSCStatus = async (sc: SC) => {
+  const handleToggleSCStatus = useCallback(async (sc: SC) => {
     try {
       const isCompleting = sc.status !== 'Concluído';
       const newStatus = isCompleting ? 'Concluído' : 'Em andamento';
@@ -467,7 +567,7 @@ export default function App() {
       console.error('Erro ao alternar status da SC:', err);
       showToast('Erro ao atualizar status da SC.', 'error');
     }
-  };
+  }, [currentUser?.nome, selectedSC?.id]);
 
   const handleSelectUser = (user: UserProfile) => {
     authService.setCurrentUser(user);
@@ -563,6 +663,38 @@ export default function App() {
       showToast('Equipamento removido do acervo.', 'info');
     } catch (err) {
       showToast('Erro ao remover equipamento.', 'error');
+    }
+  };
+
+  // Responsibility Term Handlers (Gerador de Termos)
+  const handleSaveTerm = async (termToSave: ResponsibilityTerm) => {
+    try {
+      const saved = await dbService.saveTerm(termToSave);
+      setTerms((prev) => {
+        const idx = prev.findIndex((t) => t.id === saved.id);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = saved;
+          return updated;
+        }
+        return [saved, ...prev];
+      });
+
+      showToast('Termo de responsabilidade gerado e salvo com sucesso!', 'success');
+    } catch (err) {
+      console.error('Erro ao salvar termo:', err);
+      showToast('Erro ao salvar termo de responsabilidade.', 'error');
+    }
+  };
+
+  const handleDeleteTerm = async (id: string) => {
+    try {
+      await dbService.deleteTerm(id);
+      setTerms((prev) => prev.filter((t) => t.id !== id));
+      showToast('Termo de responsabilidade excluído com sucesso.', 'info');
+    } catch (err) {
+      console.error('Erro ao excluir termo:', err);
+      showToast('Erro ao excluir termo de responsabilidade.', 'error');
     }
   };
 
@@ -746,6 +878,7 @@ export default function App() {
           setIsAdminOpen(true);
         }}
         onOpenAdminUsers={() => setIsUsersModalOpen(true)}
+        onOpenTeamModal={handleOpenTeamDropdown}
         onLogout={handleLogout}
         onRefreshCloud={handleRefreshLive}
         onNavTabChange={handleNavTabChange}
@@ -769,14 +902,14 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-5 pb-20 md:pb-6 flex flex-col gap-4 min-w-0">
-        {!permissions.canAccessAdmin && !permissions.canAccessSC && !permissions.canAccessInventario ? (
+        {!permissions.canAccessAdmin && !permissions.canAccessSC && !permissions.canAccessInventario && !permissions.canAccessTermos ? (
           <div className="p-8 sm:p-12 text-center bg-white dark:bg-[#202634] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs max-w-lg mx-auto my-8 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
               <Lock className="w-6 h-6" />
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Acesso aos Módulos Bloqueado</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Seu usuário ainda não possui permissões liberadas para o <strong>Painel de SC</strong> ou <strong>Inventários</strong>. Entre em contato com o Administrador do sistema para liberar seu acesso.
+              Seu usuário ainda não possui permissões liberadas para os módulos do sistema (<strong>Solicitações</strong>, <strong>Inventário TI</strong> ou <strong>Termo de Responsabilidade</strong>). Entre em contato com o Administrador do sistema para liberar seu acesso.
             </p>
             <button
               type="button"
@@ -806,13 +939,13 @@ export default function App() {
                 isRefreshing={isRefreshing}
                 onRefreshLive={handleRefreshLive}
                 onFilterChange={setFilters}
-                onSelectSC={(sc) => setSelectedSC(sc)}
+                onSelectSC={handleSelectSC}
                 onEditSC={handleOpenEdit}
-                onDeleteSC={(id) => setDeleteConfirmId(id)}
+                onDeleteSC={handleDeleteSCConfirm}
                 onToggleSCStatus={handleToggleSCStatus}
-                onOpenImportRM={() => setIsRMImportOpen(true)}
-                onExportCSV={() => exportToCSV(scs)}
-                onOpenKioskMode={() => setIsKioskOpen(true)}
+                onOpenImportRM={handleOpenImportRM}
+                onExportCSV={handleExportCSV}
+                onOpenKioskMode={handleOpenKioskMode}
                 onOpenAddSC={permissions.canCreateSC ? handleOpenAdd : undefined}
               />
             </motion.div>
@@ -1005,6 +1138,28 @@ export default function App() {
               />
             </motion.div>
           )}
+
+          {/* SCREEN 5: TERMO DE RESPONSABILIDADE */}
+          {activeNavTab === 'termo-responsabilidade' && (
+            <motion.div
+              key="screen-termo-responsabilidade"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
+              className="w-full"
+            >
+              <ResponsibilityTermsView
+                terms={terms}
+                equipments={equipments}
+                users={teamUsers}
+                currentUser={currentUser}
+                onSaveTerm={handleSaveTerm}
+                onDeleteTerm={handleDeleteTerm}
+                onToast={showToast}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
         )}
       </main>
@@ -1130,6 +1285,7 @@ export default function App() {
         />
       )}
 
+
       {/* Password Authentication Modal for Protected Users */}
       {isPasswordModalOpen && pendingAuthUser && (
         <PasswordAuthModal
@@ -1234,6 +1390,7 @@ export default function App() {
           setIsAdminOpen(true);
         }}
         onOpenAdminUsers={() => setIsUsersModalOpen(true)}
+        onOpenTeamModal={handleOpenTeamDropdown}
         onLogout={handleLogout}
         onFilterDelayed={() => {
           handleNavTabChange('solicitacoes');

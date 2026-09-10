@@ -6,6 +6,7 @@ export interface UserPermissions {
   // Acesso aos Módulos Principais
   canAccessSC: boolean;          // Acesso ao Painel de Solicitações de Compra
   canAccessInventario: boolean;  // Acesso ao Painel de Inventário de TI / Ativos
+  canAccessTermos: boolean;      // Acesso aos Termos de Responsabilidade
   canAccessAnalytics: boolean;   // Acesso aos Indicadores & Relatórios Gráficos
   canAccessAdmin: boolean;       // Acesso ao Painel Administrativo / Backups / Manutenção
   canManageUsers: boolean;       // Acesso à Gestão de Usuários e Permissões
@@ -17,6 +18,9 @@ export interface UserPermissions {
 
   // Ações de TI / Inventário
   canManageEquipments: boolean;  // Adicionar, editar ou desativar equipamentos
+
+  // Ações em Termos de Responsabilidade
+  canManageTermos?: boolean;     // Emitir, editar ou arquivar termos de responsabilidade
 
   // Ações Globais / Relatórios
   canExportReports: boolean;     // Exportar dados e relatórios (PDF / Excel / CSV)
@@ -44,23 +48,119 @@ export interface UserProfile {
   // Atalhos de acesso rápido para retrocompatibilidade direta
   canAccessSC?: boolean;
   canAccessInventario?: boolean;
+  canAccessTermos?: boolean;
+  canManageTermos?: boolean;
   canAccessAnalytics?: boolean;
   canAccessAdmin?: boolean;
   canManageUsers?: boolean;
 
   isBuiltIn?: boolean;
   createdAt?: string;
+
+  // Status de conexão e presença do perfil (Online / Offline)
+  isOnline?: boolean;
+  lastSeen?: string;
 }
 
 export type CloudSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 
 export type MainModule = 'sc' | 'inventario';
 
-export type ActiveNavTab = 'solicitacoes' | 'indicadores' | 'graficos' | 'inventario';
+export type ActiveNavTab = 'solicitacoes' | 'indicadores' | 'graficos' | 'inventario' | 'termo-responsabilidade';
 
 export type ActiveTab = 'principal' | 'dashboards' | 'lista';
 
 export type EquipmentStatus = 'Ativado' | 'Desativado' | 'Manutenção' | 'Em Uso' | 'Disponível';
+
+export type TermStatus = 'Ativo' | 'Devolvido' | 'Pendente';
+
+export interface TermEquipmentItem {
+  equipmentId?: string; // ID do equipamento no inventário, se vinculado
+  codigoPatrimonio: string; // AF ou Patrimônio (ex: AF-0042)
+  nome: string; // Descrição (ex: Notebook Dell Latitude 3420)
+  categoria?: string;
+  marcaModelo?: string;
+  numeroSerie?: string;
+  estadoConservacao?: string; // ex: 'Novo', 'Excelente', 'Bom'
+  valorEstimado?: number;
+}
+
+export interface ResponsibilityTerm {
+  id: string;
+  numeroTermo: string; // ex: TR-2026-001 ou AF-30466
+  tipo?: 'Entrega' | 'Devolucao' | 'Emprestimo';
+  dataEmissao: string; // YYYY-MM-DD
+  dataDevolucaoPrevista?: string; // YYYY-MM-DD
+  dataDevolucaoEfetiva?: string; // YYYY-MM-DD
+  status: TermStatus;
+
+  // Documento Oficial Modelo
+  tituloDocumento?: string; // Padrão: "Termo de Responsabilidade Notebook"
+  codigoDocumento?: string; // Padrão: "RG.TI.001 Rev00 10ago2020"
+
+  // Colaborador / Responsável
+  colaboradorNome: string; // Nome em destaque (ex: Nise Luis de Lima)
+  colaboradorId?: string;
+  colaboradorCargo?: string;
+  colaboradorDepartamento?: string;
+  colaboradorDocumento?: string; // CPF ou Matrícula
+  colaboradorEmail?: string;
+
+  // Dados do Aparelho Notebook (Conforme modelo oficial)
+  modelo: string; // ex: "VOSTRO 3480"
+  processador: string; // ex: "Intel Core I5"
+  memoria: string; // ex: "8 GB"
+  capacidadeHD: string; // ex: "SSD 256 GB"
+  af: string; // ex: "30466"
+
+  // Checklists oficiais
+  checklistVerificacao: {
+    oneDrive?: boolean;
+    teams?: boolean;
+    office365?: boolean;
+    office2010?: boolean;
+    bitdefender?: boolean;
+    java?: boolean;
+    fortnet?: boolean;
+    anydesk?: boolean;
+    sharepoint?: boolean;
+    [key: string]: boolean | undefined;
+  };
+
+  opcionais: {
+    zwcad?: boolean;
+    dwgNaviswork?: boolean;
+    powerBi?: boolean;
+    project?: boolean;
+    [key: string]: boolean | undefined;
+  };
+
+  // Centro de Custo, Cidade e Assinatura
+  centroCusto?: string; // ex: "CEQ - Central de Equipamentos"
+  cidade?: string; // Fixo: "Escada, PE"
+
+  // Local & Finalidade (Opcionais adicionais)
+  localUso?: string;
+  finalidade?: string;
+
+  // Equipamentos e Acessórios legados/extras
+  equipamentos?: TermEquipmentItem[];
+  acessorios?: string[];
+
+  // Observações adicionais e Anexo
+  observacoes?: string;
+  anexoNome?: string;
+  anexoUrl?: string;
+
+  // Assinatura e Autoria
+  emitidoPor?: string;
+  assinadoDigitalmente?: boolean;
+  assinaturaUrl?: string; // Data URL com desenho da rubrica/assinatura
+  dataAssinatura?: string;
+
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface EquipmentMaintenanceRecord {
   id: string;

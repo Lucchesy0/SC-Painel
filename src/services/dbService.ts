@@ -1,4 +1,4 @@
-import { SC, AuditLogEntry, ThemeMode, Equipment, MainModule, SCItem } from '../types';
+import { SC, AuditLogEntry, ThemeMode, Equipment, MainModule, SCItem, ResponsibilityTerm } from '../types';
 import { syncService } from './syncService';
 import {
   saveSCToFirestore,
@@ -14,6 +14,9 @@ import {
   clearEquipmentsInFirestore,
   fetchSettingFromFirestore,
   saveSettingToFirestore,
+  fetchAllTermsFromFirestore,
+  saveTermToFirestore,
+  deleteTermFromFirestore,
 } from './firebase';
 import {
   getAllSCsFromIDB,
@@ -369,5 +372,60 @@ export const dbService = {
     saveSettingToFirestore('active_module', module).catch(() => {});
     saveSettingToIDB('active_module', module).catch(() => {});
     return module;
+  },
+
+  /**
+   * Termos de Responsabilidade (TI & Equipamentos)
+   */
+  async getTerms(): Promise<ResponsibilityTerm[]> {
+    try {
+      const cloudData = await fetchAllTermsFromFirestore();
+      if (cloudData && cloudData.length > 0) {
+        try {
+          localStorage.setItem('mcm_terms_cache', JSON.stringify(cloudData));
+        } catch {}
+        return cloudData;
+      }
+      try {
+        const cached = localStorage.getItem('mcm_terms_cache');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+      return cloudData || [];
+    } catch (err) {
+      console.warn('Firestore inacessível para termos de responsabilidade, usando cache local:', err);
+      try {
+        const cached = localStorage.getItem('mcm_terms_cache');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+      return [];
+    }
+  },
+
+  async saveTerm(term: ResponsibilityTerm): Promise<ResponsibilityTerm> {
+    await saveTermToFirestore(term);
+    try {
+      const current = await this.getTerms();
+      const idx = current.findIndex((t) => t.id === term.id);
+      const updated = idx >= 0 ? current.map((t, i) => (i === idx ? term : t)) : [term, ...current];
+      localStorage.setItem('mcm_terms_cache', JSON.stringify(updated));
+    } catch {}
+    syncService.broadcast('term_saved', term);
+    return term;
+  },
+
+  async deleteTerm(id: string): Promise<boolean> {
+    try {
+      await deleteTermFromFirestore(id);
+      try {
+        const current = await this.getTerms();
+        const filtered = current.filter((t) => t.id !== id);
+        localStorage.setItem('mcm_terms_cache', JSON.stringify(filtered));
+      } catch {}
+      syncService.broadcast('term_deleted', { id });
+      return true;
+    } catch (err) {
+      console.error('Erro ao excluir termo de responsabilidade:', err);
+      return false;
+    }
   },
 };

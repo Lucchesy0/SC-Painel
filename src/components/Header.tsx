@@ -8,18 +8,21 @@ import {
   LayoutDashboard,
   BarChart3,
   Boxes,
+  FileCheck,
   Command,
   Settings as SettingsIcon,
   ChevronDown,
   Check,
   RefreshCw,
+  Users,
 } from 'lucide-react';
 import { ActiveNavTab, ThemeMode, UserProfile, CloudSyncStatus, SC, Equipment } from '../types';
 import { MCMLogo } from './MCMLogo';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfileMenu } from './UserProfileMenu';
 import { HeaderSearchDropdown } from './HeaderSearchDropdown';
-import { getUserPermissions } from '../services/authService';
+import { TeamPresenceDropdown } from './TeamPresenceDropdown';
+import { getUserPermissions, isUserOnline } from '../services/authService';
 
 interface HeaderProps {
   activeNavTab: ActiveNavTab;
@@ -42,6 +45,7 @@ interface HeaderProps {
   onOpenEditProfile?: () => void;
   onOpenAdminUsers?: () => void;
   onOpenAdminOverview?: () => void;
+  onOpenTeamModal?: () => void;
   onRefreshCloud?: () => void;
   onNavTabChange?: (tab: ActiveNavTab) => void;
   onOpenGlobalSearch?: () => void;
@@ -60,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
   equipmentCount = 0,
   urgentNotificationsCount = 0,
   currentUser,
+  users = [],
   cloudStatus = 'connected',
   lastSyncTime,
   scs = [],
@@ -70,6 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenEditProfile,
   onOpenAdminUsers,
   onOpenAdminOverview,
+  onOpenTeamModal,
   onRefreshCloud,
   onNavTabChange,
   onOpenGlobalSearch,
@@ -81,6 +87,8 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [isSCOptionsOpen, setIsSCOptionsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isInventarioOptionsOpen, setIsInventarioOptionsOpen] = useState(false);
+  const inventarioDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click or Escape key
   useEffect(() => {
@@ -88,10 +96,14 @@ export const Header: React.FC<HeaderProps> = ({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsSCOptionsOpen(false);
       }
+      if (inventarioDropdownRef.current && !inventarioDropdownRef.current.contains(event.target as Node)) {
+        setIsInventarioOptionsOpen(false);
+      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsSCOptionsOpen(false);
+        setIsInventarioOptionsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -105,8 +117,15 @@ export const Header: React.FC<HeaderProps> = ({
   const perms = getUserPermissions(currentUser);
   const canAccessSC = perms.canAccessSC;
   const canAccessInventario = perms.canAccessInventario;
+  const canAccessTermos = perms.canAccessTermos;
 
   const isSCActive = activeNavTab === 'solicitacoes' || activeNavTab === 'indicadores' || activeNavTab === 'graficos';
+  const isInventarioActive = activeNavTab === 'inventario' || activeNavTab === 'termo-responsabilidade';
+
+  const onlineUsersCount = React.useMemo(() => {
+    if (!users || users.length === 0) return 1;
+    return users.filter((u) => isUserOnline(u, currentUser)).length;
+  }, [users, currentUser]);
 
   const scSubItems = [
     {
@@ -136,6 +155,27 @@ export const Header: React.FC<HeaderProps> = ({
       label: 'Gráficos',
       description: 'Análise visual e tendências',
       icon: BarChart3,
+      badge: null,
+    },
+  ];
+
+  const inventarioSubItems = [
+    {
+      id: 'inventario' as ActiveNavTab,
+      label: 'Inventário TI',
+      description: 'Equipamentos, patrimônio e ativos',
+      icon: Boxes,
+      badge: equipmentCount > 0 ? (
+        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-100 text-blue-700">
+          {equipmentCount}
+        </span>
+      ) : null,
+    },
+    {
+      id: 'termo-responsabilidade' as ActiveNavTab,
+      label: 'Termo de Responsabilidade',
+      description: 'Entrega, custódia e devolução de ativos',
+      icon: FileCheck,
       badge: null,
     },
   ];
@@ -289,17 +329,119 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
 
-              {/* Inventário TI Tab */}
-              {canAccessInventario && (
+              {/* Inventário TI & Termos de Responsabilidade Navigation */}
+              {canAccessInventario && canAccessTermos ? (
+                /* Both permissions active: dropdown selector */
+                <div className="relative" ref={inventarioDropdownRef}>
+                  <button
+                    type="button"
+                    id="navTab-inventario-dropdown"
+                    onClick={() => {
+                      setIsSCOptionsOpen(false);
+                      setIsInventarioOptionsOpen((prev) => !prev);
+                    }}
+                    aria-expanded={isInventarioOptionsOpen}
+                    aria-haspopup="menu"
+                    className={`relative z-10 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[32px] font-bold focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-hidden ${
+                      isInventarioActive
+                        ? 'text-blue-600 font-extrabold bg-white shadow-xs border border-slate-200/90'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    {activeNavTab === 'termo-responsabilidade' ? (
+                      <FileCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+                    ) : (
+                      <Boxes className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isInventarioActive ? 'text-blue-600' : 'text-slate-500'}`} />
+                    )}
+                    <span>
+                      {activeNavTab === 'termo-responsabilidade'
+                        ? 'Termos TI'
+                        : 'Inventário TI'}
+                    </span>
+                    {equipmentCount > 0 && activeNavTab === 'inventario' && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-600 text-white shadow-xs">
+                        {equipmentCount}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isInventarioOptionsOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
+                      }`}
+                    />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  <AnimatePresence>
+                    {isInventarioOptionsOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-0 top-full mt-1.5 w-64 rounded-2xl bg-white border border-slate-200 shadow-xl z-50 p-1.5 overflow-hidden"
+                        role="menu"
+                      >
+                        <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
+                          Módulo de Ativos & TI
+                        </div>
+
+                        <div className="flex flex-col gap-0.5">
+                          {inventarioSubItems.map((item) => {
+                            const isItemActive = activeNavTab === item.id;
+                            const ItemIcon = item.icon;
+
+                            return (
+                              <button
+                                key={item.id}
+                                role="menuitem"
+                                onClick={() => {
+                                  onNavTabChange(item.id);
+                                  setIsInventarioOptionsOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer group ${
+                                  isItemActive
+                                    ? 'bg-blue-50/90 text-blue-700 font-semibold'
+                                    : 'hover:bg-slate-50 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                                      isItemActive
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600'
+                                    }`}
+                                  >
+                                    <ItemIcon className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold truncate block">{item.label}</span>
+                                    <span className="text-[10px] text-slate-400 truncate block">
+                                      {item.description}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0 pl-1">
+                                  {item.badge}
+                                  {isItemActive && (
+                                    <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : canAccessInventario && !canAccessTermos ? (
+                /* Only Inventário TI access */
                 <button
                   type="button"
-                  id="navTab-inventario"
-                  role="tab"
-                  aria-selected={activeNavTab === 'inventario'}
-                  onClick={() => {
-                    onNavTabChange('inventario');
-                    setIsSCOptionsOpen(false);
-                  }}
+                  id="navTab-inventario-btn"
+                  onClick={() => onNavTabChange('inventario')}
                   className={`relative z-10 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[32px] font-bold focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-hidden ${
                     activeNavTab === 'inventario'
                       ? 'text-blue-600 font-extrabold bg-white shadow-xs border border-slate-200/90'
@@ -309,18 +451,27 @@ export const Header: React.FC<HeaderProps> = ({
                   <Boxes className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeNavTab === 'inventario' ? 'text-blue-600' : 'text-slate-500'}`} />
                   <span>Inventário TI</span>
                   {equipmentCount > 0 && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold transition-all ${
-                        activeNavTab === 'inventario'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-600 text-white shadow-xs">
                       {equipmentCount}
                     </span>
                   )}
                 </button>
-              )}
+              ) : !canAccessInventario && canAccessTermos ? (
+                /* Only Termos de Responsabilidade access */
+                <button
+                  type="button"
+                  id="navTab-termos-btn"
+                  onClick={() => onNavTabChange('termo-responsabilidade')}
+                  className={`relative z-10 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[32px] font-bold focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-hidden ${
+                    activeNavTab === 'termo-responsabilidade'
+                      ? 'text-blue-600 font-extrabold bg-white shadow-xs border border-slate-200/90'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <FileCheck className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeNavTab === 'termo-responsabilidade' ? 'text-blue-600' : 'text-slate-500'}`} />
+                  <span>Termo de Responsabilidade</span>
+                </button>
+              ) : null}
             </nav>
           )}
         </div>
@@ -357,6 +508,13 @@ export const Header: React.FC<HeaderProps> = ({
               </motion.div>
             ) : null}
           </AnimatePresence>
+
+          {/* Menu Dropdown de Equipe (Abre embaixo pequeno de forma sofisticada) */}
+          <TeamPresenceDropdown
+            users={users}
+            currentUser={currentUser}
+            onOpenAdminUsers={onOpenAdminUsers}
+          />
 
           {/* Settings Button (Admin Only) */}
           {perms.canAccessAdmin && onOpenSettings && (
@@ -400,6 +558,7 @@ export const Header: React.FC<HeaderProps> = ({
             onOpenSettings={onOpenSettings}
             onOpenAdminUsers={onOpenAdminUsers}
             onOpenAdminOverview={onOpenAdminOverview}
+            onOpenTeamModal={onOpenTeamModal}
             onLogout={onLogout}
             cloudStatus={cloudStatus}
             lastSyncTime={lastSyncTime}

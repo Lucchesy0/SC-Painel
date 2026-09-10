@@ -63,6 +63,22 @@
         "updatedAt": { "type": "string", "description": "Data de atualização" }
       },
       "required": ["key", "value"]
+    },
+    "responsibilityTerm": {
+      "title": "Termo de Responsabilidade",
+      "description": "Termo de custódia, entrega e devolução de equipamentos de TI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID do termo" },
+        "numeroTermo": { "type": "string", "description": "Código do termo (TR-YYYY-NNN)" },
+        "colaboradorNome": { "type": "string", "description": "Nome do colaborador" },
+        "colaboradorCargo": { "type": "string", "description": "Cargo do colaborador" },
+        "colaboradorDepartamento": { "type": "string", "description": "Departamento do colaborador" },
+        "dataEmissao": { "type": "string", "description": "Data de entrega (YYYY-MM-DD)" },
+        "status": { "type": "string", "description": "Ativo | Devolvido | Pendente" },
+        "equipamentos": { "type": "array", "description": "Equipamentos vinculados ao termo" }
+      },
+      "required": ["id", "numeroTermo", "colaboradorNome", "dataEmissao", "status"]
     }
   },
   "firestore": {
@@ -81,6 +97,10 @@
     "/system_settings/{settingId}": {
       "schema": "systemSetting",
       "description": "Configurações gerais do sistema"
+    },
+    "/responsibility_terms/{termId}": {
+      "schema": "responsibilityTerm",
+      "description": "Coleção de termos de responsabilidade de equipamentos de TI"
     }
   }
 }

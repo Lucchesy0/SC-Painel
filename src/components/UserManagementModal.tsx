@@ -23,8 +23,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/40 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-4xl rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/50 backdrop-blur-xs">
+      <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header Claro, Limpo e Específico para Usuários e Permissões */}
         <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shrink-0">
@@ -58,7 +58,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         </div>
 
         {/* Corpo do Modal - Conteúdo de Gestão de Usuários */}
-        <div className="p-6 overflow-y-auto flex-1 bg-white text-slate-800">
+        <div className="p-3 sm:p-5 md:p-6 overflow-y-auto flex-1 bg-white text-slate-800">
           <UserManagementTab
             users={users}
             currentUser={currentUser}

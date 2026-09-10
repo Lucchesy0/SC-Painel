@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   User,
@@ -50,8 +50,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const isInitializedRef = useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      isInitializedRef.current = false;
+      return;
+    }
+
+    if (!isInitializedRef.current) {
+      isInitializedRef.current = true;
       setNome(user.nome);
       setEmail(user.email);
       setDepartamento(user.departamento);
@@ -60,7 +68,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setShowPassword(false);
       setIsSaving(false);
     }
-  }, [isOpen, user]);
+  }, [isOpen, user.id]);
 
   if (!isOpen) return null;
 

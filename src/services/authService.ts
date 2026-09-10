@@ -10,6 +10,7 @@ import {
 export const DEFAULT_USER_PERMISSIONS: UserPermissions = {
   canAccessSC: true,
   canAccessInventario: true,
+  canAccessTermos: true,
   canAccessAnalytics: true,
   canAccessAdmin: false,
   canManageUsers: false,
@@ -17,6 +18,7 @@ export const DEFAULT_USER_PERMISSIONS: UserPermissions = {
   canEditSC: true,
   canDeleteSC: false,
   canManageEquipments: false,
+  canManageTermos: true,
   canExportReports: true,
   canImportData: false,
 };
@@ -24,6 +26,7 @@ export const DEFAULT_USER_PERMISSIONS: UserPermissions = {
 export const ADMIN_USER_PERMISSIONS: UserPermissions = {
   canAccessSC: true,
   canAccessInventario: true,
+  canAccessTermos: true,
   canAccessAnalytics: true,
   canAccessAdmin: true,
   canManageUsers: true,
@@ -31,6 +34,7 @@ export const ADMIN_USER_PERMISSIONS: UserPermissions = {
   canEditSC: true,
   canDeleteSC: true,
   canManageEquipments: true,
+  canManageTermos: true,
   canExportReports: true,
   canImportData: true,
 };
@@ -48,6 +52,7 @@ export const INITIAL_ADMIN_USER: UserProfile = {
   permissions: ADMIN_USER_PERMISSIONS,
   canAccessSC: true,
   canAccessInventario: true,
+  canAccessTermos: true,
   canAccessAnalytics: true,
   canAccessAdmin: true,
   canManageUsers: true,
@@ -69,6 +74,7 @@ export const INITIAL_KIOSK_USER: UserProfile = {
   permissions: {
     canAccessSC: true,
     canAccessInventario: false,
+    canAccessTermos: false,
     canAccessAnalytics: false,
     canAccessAdmin: false,
     canManageUsers: false,
@@ -76,11 +82,13 @@ export const INITIAL_KIOSK_USER: UserProfile = {
     canEditSC: false,
     canDeleteSC: false,
     canManageEquipments: false,
+    canManageTermos: false,
     canExportReports: false,
     canImportData: false,
   },
   canAccessSC: true,
   canAccessInventario: false,
+  canAccessTermos: false,
   canAccessAnalytics: false,
   canAccessAdmin: false,
   canManageUsers: false,
@@ -103,6 +111,7 @@ export function getUserPermissions(user?: UserProfile | null): UserPermissions {
   return {
     canAccessSC: p.canAccessSC ?? user.canAccessSC ?? base.canAccessSC,
     canAccessInventario: p.canAccessInventario ?? user.canAccessInventario ?? base.canAccessInventario,
+    canAccessTermos: p.canAccessTermos ?? user.canAccessTermos ?? base.canAccessTermos,
     canAccessAnalytics: p.canAccessAnalytics ?? user.canAccessAnalytics ?? base.canAccessAnalytics,
     canAccessAdmin: p.canAccessAdmin ?? user.canAccessAdmin ?? (isBuiltinAdmin ? true : base.canAccessAdmin),
     canManageUsers: p.canManageUsers ?? user.canManageUsers ?? (isBuiltinAdmin ? true : base.canManageUsers),
@@ -110,6 +119,7 @@ export function getUserPermissions(user?: UserProfile | null): UserPermissions {
     canEditSC: p.canEditSC ?? base.canEditSC,
     canDeleteSC: p.canDeleteSC ?? base.canDeleteSC,
     canManageEquipments: p.canManageEquipments ?? base.canManageEquipments,
+    canManageTermos: p.canManageTermos ?? base.canManageTermos,
     canExportReports: p.canExportReports ?? base.canExportReports,
     canImportData: p.canImportData ?? base.canImportData,
   };
@@ -201,6 +211,153 @@ export function getRoleBadgeClass(roleOrCargo?: string): { bg: string; text: str
     bg: 'bg-slate-500/10 dark:bg-slate-500/20',
     text: 'text-slate-700 dark:text-slate-300',
     border: 'border-slate-500/30',
+  };
+}
+
+/**
+ * Determina se um perfil de usuário está Online (verde) ou Offline (vermelho)
+ */
+export function isUserOnline(
+  user?: Partial<UserProfile> | { id?: string; name?: string; nome?: string; isOnline?: boolean; lastSeen?: string | number } | null,
+  currentUser?: UserProfile | null
+): boolean {
+  if (!user) return false;
+
+  // Se o dispositivo/navegador estiver desconectado da rede
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return false;
+  }
+
+  const userId = user.id;
+  const userName = (user as any).nome || (user as any).name;
+
+  // O usuário ativo nesta sessão/dispositivo está sempre Online
+  if (currentUser) {
+    if (userId && currentUser.id && userId === currentUser.id) return true;
+    if (
+      userName &&
+      currentUser.nome &&
+      userName.trim().toLowerCase() === currentUser.nome.trim().toLowerCase()
+    ) {
+      return true;
+    }
+  }
+
+  // Se estiver explicitamente desligado
+  if (user.isOnline === false) {
+    return false;
+  }
+
+  // Se possui heartbeat / atividade recente nos últimos 5 minutos
+  if (user.lastSeen) {
+    const lastSeenTime = new Date(user.lastSeen).getTime();
+    if (!isNaN(lastSeenTime)) {
+      const diffMinutes = (Date.now() - lastSeenTime) / (1000 * 60);
+      return diffMinutes <= 5;
+    }
+  }
+
+  // Se marcado com isOnline: true no banco
+  if (user.isOnline === true) {
+    return true;
+  }
+
+  // Perfis sem sessão ativa estão Offline
+  return false;
+}
+
+export interface UserActivityInfo {
+  isOnline: boolean;
+  statusLabel: string;
+  exactTime: string;
+  relativeTime: string;
+  tooltipText: string;
+}
+
+/**
+ * Retorna dados detalhados de presença e horário formatado da última aparição (lastSeen)
+ */
+export function getUserActivityInfo(
+  user?: Partial<UserProfile> | { id?: string; name?: string; nome?: string; isOnline?: boolean; lastSeen?: string | number } | null,
+  currentUser?: UserProfile | null
+): UserActivityInfo {
+  if (!user) {
+    return {
+      isOnline: false,
+      statusLabel: 'Offline',
+      exactTime: 'Não informado',
+      relativeTime: 'Sem registro',
+      tooltipText: 'Status: Offline • Nenhuma atividade recente registrada',
+    };
+  }
+
+  const online = isUserOnline(user, currentUser);
+
+  if (online) {
+    return {
+      isOnline: true,
+      statusLabel: 'Online',
+      exactTime: 'Neste momento',
+      relativeTime: 'Agora mesmo',
+      tooltipText: '🟢 Online agora • Operando no painel neste momento',
+    };
+  }
+
+  if (!user.lastSeen) {
+    return {
+      isOnline: false,
+      statusLabel: 'Offline',
+      exactTime: 'Sem registro recente',
+      relativeTime: 'Sem registro',
+      tooltipText: '🔴 Offline • Nenhuma sessão recente registrada',
+    };
+  }
+
+  const d = new Date(user.lastSeen);
+  if (isNaN(d.getTime())) {
+    return {
+      isOnline: false,
+      statusLabel: 'Offline',
+      exactTime: 'Horário indisponível',
+      relativeTime: 'Offline',
+      tooltipText: '🔴 Offline • Horário da última sessão indisponível',
+    };
+  }
+
+  const dateStr = d.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const timeStr = d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const now = Date.now();
+  const diffMs = Math.max(0, now - d.getTime());
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  let relative = '';
+  if (diffMinutes < 1) {
+    relative = 'Há menos de 1 minuto';
+  } else if (diffMinutes < 60) {
+    relative = `Há ${diffMinutes} min`;
+  } else if (diffHours < 24) {
+    relative = `Há ${diffHours}h ${diffMinutes % 60}min`;
+  } else {
+    relative = `Há ${diffDays} dia${diffDays > 1 ? 's' : ''}`;
+  }
+
+  return {
+    isOnline: false,
+    statusLabel: 'Offline',
+    exactTime: `${dateStr} às ${timeStr}`,
+    relativeTime: relative,
+    tooltipText: `🔴 Offline • Última atividade: ${dateStr} às ${timeStr} (${relative})`,
   };
 }
 
@@ -468,6 +625,8 @@ export const authService = {
     permissions?: Partial<UserPermissions>;
     canAccessSC?: boolean;
     canAccessInventario?: boolean;
+    canAccessTermos?: boolean;
+    canManageTermos?: boolean;
   }): Promise<UserProfile> {
     const id = 'usr-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
     const colors = [
@@ -491,6 +650,8 @@ export const authService = {
     };
     if (userData.canAccessSC !== undefined) mergedPermissions.canAccessSC = userData.canAccessSC;
     if (userData.canAccessInventario !== undefined) mergedPermissions.canAccessInventario = userData.canAccessInventario;
+    if (userData.canAccessTermos !== undefined) mergedPermissions.canAccessTermos = userData.canAccessTermos;
+    if (userData.canManageTermos !== undefined) mergedPermissions.canManageTermos = userData.canManageTermos;
 
     const newUser: UserProfile = {
       id,
@@ -505,6 +666,8 @@ export const authService = {
       permissions: mergedPermissions,
       canAccessSC: mergedPermissions.canAccessSC,
       canAccessInventario: mergedPermissions.canAccessInventario,
+      canAccessTermos: mergedPermissions.canAccessTermos,
+      canManageTermos: mergedPermissions.canManageTermos,
       canAccessAnalytics: mergedPermissions.canAccessAnalytics,
       canAccessAdmin: mergedPermissions.canAccessAdmin,
       canManageUsers: mergedPermissions.canManageUsers,
@@ -532,6 +695,8 @@ export const authService = {
 
     if (updateData.canAccessSC !== undefined) updatedPerms.canAccessSC = updateData.canAccessSC;
     if (updateData.canAccessInventario !== undefined) updatedPerms.canAccessInventario = updateData.canAccessInventario;
+    if (updateData.canAccessTermos !== undefined) updatedPerms.canAccessTermos = updateData.canAccessTermos;
+    if (updateData.canManageTermos !== undefined) updatedPerms.canManageTermos = updateData.canManageTermos;
     if (updateData.canAccessAnalytics !== undefined) updatedPerms.canAccessAnalytics = updateData.canAccessAnalytics;
     if (updateData.canAccessAdmin !== undefined) updatedPerms.canAccessAdmin = updateData.canAccessAdmin;
     if (updateData.canManageUsers !== undefined) updatedPerms.canManageUsers = updateData.canManageUsers;
@@ -543,6 +708,8 @@ export const authService = {
       permissions: updatedPerms,
       canAccessSC: updatedPerms.canAccessSC,
       canAccessInventario: updatedPerms.canAccessInventario,
+      canAccessTermos: updatedPerms.canAccessTermos,
+      canManageTermos: updatedPerms.canManageTermos,
       canAccessAnalytics: updatedPerms.canAccessAnalytics,
       canAccessAdmin: updatedPerms.canAccessAdmin,
       canManageUsers: updatedPerms.canManageUsers,

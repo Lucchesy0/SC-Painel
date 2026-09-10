@@ -30,20 +30,67 @@ interface SCRowItemProps {
   onMouseLeave?: () => void;
 }
 
-export const SCRowItem: React.FC<SCRowItemProps> = memo(
-  ({
-    sc,
-    gridConfig,
-    cellPadding,
-    permissions,
-    onSelectSC,
-    onEditSC,
-    onDeleteSC,
-    onToggleStatus,
-    onMouseEnter,
-    onMouseMove,
-    onMouseLeave,
-  }) => {
+const areSCRowPropsEqual = (prev: SCRowItemProps, next: SCRowItemProps): boolean => {
+  if (prev.sc !== next.sc) {
+    if (
+      prev.sc.id !== next.sc.id ||
+      prev.sc.numero !== next.sc.numero ||
+      prev.sc.status !== next.sc.status ||
+      prev.sc.data !== next.sc.data ||
+      prev.sc.solicitante !== next.sc.solicitante ||
+      prev.sc.observacoes !== next.sc.observacoes ||
+      prev.sc.prioridade !== next.sc.prioridade ||
+      prev.sc.dataVencimento !== next.sc.dataVencimento ||
+      prev.sc.itens !== next.sc.itens ||
+      prev.sc.comentarios !== next.sc.comentarios
+    ) {
+      return false;
+    }
+  }
+
+  if (prev.cellPadding !== next.cellPadding) return false;
+  if (prev.permissions !== next.permissions) return false;
+
+  if (prev.gridConfig !== next.gridConfig) {
+    if (prev.gridConfig.density !== next.gridConfig.density) return false;
+    const pCols = prev.gridConfig.visibleColumns;
+    const nCols = next.gridConfig.visibleColumns;
+    if (
+      pCols.numero !== nCols.numero ||
+      pCols.data !== nCols.data ||
+      pCols.solicitante !== nCols.solicitante ||
+      pCols.status !== nCols.status ||
+      pCols.itens !== nCols.itens ||
+      pCols.dias !== nCols.dias ||
+      pCols.prioridade !== nCols.prioridade
+    ) {
+      return false;
+    }
+  }
+
+  return (
+    prev.onSelectSC === next.onSelectSC &&
+    prev.onEditSC === next.onEditSC &&
+    prev.onDeleteSC === next.onDeleteSC &&
+    prev.onToggleStatus === next.onToggleStatus &&
+    prev.onMouseMove === next.onMouseMove &&
+    prev.onMouseLeave === next.onMouseLeave
+  );
+};
+
+const SCRowItemComponent: React.FC<SCRowItemProps> = ({
+  sc,
+  gridConfig,
+  cellPadding,
+  permissions,
+  onSelectSC,
+  onEditSC,
+  onDeleteSC,
+  onToggleStatus,
+  onMouseEnter,
+  onMouseMove,
+  onMouseLeave,
+}) => {
     const [isCompletingAnim, setIsCompletingAnim] = useState(false);
     const slaSettings = useSlaSettings();
     const dias = calcDays(sc.data, sc.status);
@@ -296,7 +343,8 @@ export const SCRowItem: React.FC<SCRowItemProps> = memo(
         </td>
       </tr>
     );
-  }
-);
+  };
+
+export const SCRowItem = memo(SCRowItemComponent, areSCRowPropsEqual);
 
 SCRowItem.displayName = 'SCRowItem';

@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   BarChart3,
   Boxes,
+  FileCheck,
   Plus,
   FileSpreadsheet,
   Search,
@@ -23,7 +24,7 @@ import {
 import { ActiveNavTab, ThemeMode, UserProfile } from '../types';
 import { MCMLogo } from './MCMLogo';
 import { triggerHaptic } from '../utils/haptics';
-import { getUserCargo, getUserPermissions } from '../services/authService';
+import { getUserCargo, getUserPermissions, isUserOnline } from '../services/authService';
 
 interface AppDrawerMenuProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ interface AppDrawerMenuProps {
   onOpenSettings?: () => void;
   onOpenAdmin: () => void;
   onOpenAdminUsers?: () => void;
+  onOpenTeamModal?: () => void;
   onLogout?: () => void;
   onOpenShortcuts?: () => void;
   onFilterDelayed?: () => void;
@@ -77,6 +79,7 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
   onOpenSettings,
   onOpenAdmin,
   onOpenAdminUsers,
+  onOpenTeamModal,
   onLogout,
   onOpenShortcuts,
   onFilterDelayed,
@@ -145,9 +148,18 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
       badge: equipmentCount > 0 ? `${equipmentCount}` : null,
       badgeType: 'neutral',
     },
+    {
+      id: 'termo-responsabilidade' as ActiveNavTab,
+      label: 'Termo de Responsabilidade',
+      module: 'termos',
+      icon: FileCheck,
+      badge: null,
+      badgeType: 'neutral',
+    },
   ].filter((item) => {
     if (item.module === 'sc' && !perms.canAccessSC) return false;
     if (item.module === 'inventario' && !perms.canAccessInventario) return false;
+    if (item.module === 'termos' && !perms.canAccessTermos) return false;
     return true;
   });
 
@@ -195,9 +207,17 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     <div
                       className={`w-8 h-8 rounded-lg ${
                         currentUser.avatarColor || 'bg-slate-700'
-                      } text-white flex items-center justify-center font-bold text-xs shrink-0`}
+                      } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
                     >
                       {currentUser.nome.charAt(0).toUpperCase()}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                          isUserOnline(currentUser, currentUser)
+                            ? 'bg-emerald-500'
+                            : 'bg-rose-500'
+                        }`}
+                        title={isUserOnline(currentUser, currentUser) ? 'Online' : 'Offline'}
+                      />
                     </div>
                     <div className="min-w-0 truncate">
                       <span className="text-xs font-bold text-slate-800 block truncate leading-snug">
@@ -467,6 +487,26 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     >
                       <Users className="w-4 h-4 text-slate-500" />
                       <span>Usuários & Permissões</span>
+                    </button>
+                  )}
+
+                  {onOpenTeamModal && (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('light');
+                        onOpenTeamModal();
+                        onClose();
+                      }}
+                      className="w-full px-2.5 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Users className="w-4 h-4 text-orange-500" />
+                        <span>Equipe & Presença</span>
+                      </div>
+                      <span className="flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>Ver</span>
+                      </span>
                     </button>
                   )}
 

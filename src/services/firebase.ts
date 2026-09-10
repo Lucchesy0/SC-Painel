@@ -14,7 +14,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { SC, Equipment, CloudSyncStatus, UserProfile } from '../types';
+import { SC, Equipment, CloudSyncStatus, UserProfile, ResponsibilityTerm } from '../types';
 
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -31,6 +31,7 @@ export const SCS_COLLECTION = 'scs';
 export const EQUIPMENTS_COLLECTION = 'equipments';
 export const SETTINGS_COLLECTION = 'system_settings';
 export const USERS_COLLECTION = 'users';
+export const RESPONSIBILITY_TERMS_COLLECTION = 'responsibility_terms';
 
 export enum OperationType {
   CREATE = 'create',
@@ -557,4 +558,79 @@ export async function seedInitialUsersToFirestore(defaultUsers: UserProfile[]): 
     return defaultUsers;
   }
 }
+
+/**
+ * Fetch all Responsibility Terms from Firestore
+ */
+export async function fetchAllTermsFromFirestore(): Promise<ResponsibilityTerm[]> {
+  try {
+    const termsRef = collection(db, RESPONSIBILITY_TERMS_COLLECTION);
+    const snap = await getDocs(termsRef);
+    const list: ResponsibilityTerm[] = [];
+    snap.forEach((docSnap) => {
+      list.push({ ...(docSnap.data() as ResponsibilityTerm), id: docSnap.id });
+    });
+    // Sort descending by date
+    list.sort((a, b) => new Date(b.dataEmissao || '').getTime() - new Date(a.dataEmissao || '').getTime());
+    return list;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, RESPONSIBILITY_TERMS_COLLECTION);
+    return [];
+  }
+}
+
+/**
+ * Save or update a Responsibility Term in Firestore
+ */
+export async function saveTermToFirestore(term: ResponsibilityTerm): Promise<void> {
+  try {
+    const docRef = doc(db, RESPONSIBILITY_TERMS_COLLECTION, term.id);
+    await setDoc(docRef, sanitizeForFirestore(term), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${RESPONSIBILITY_TERMS_COLLECTION}/${term.id}`);
+    throw err;
+  }
+}
+
+/**
+ * Delete a Responsibility Term from Firestore
+ */
+export async function deleteTermFromFirestore(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, RESPONSIBILITY_TERMS_COLLECTION, id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${RESPONSIBILITY_TERMS_COLLECTION}/${id}`);
+    throw err;
+  }
+}
+
+/**
+ * Real-time listener for Responsibility Terms collection
+ */
+export function subscribeToFirestoreTerms(
+  onTermsUpdated: (terms: ResponsibilityTerm[]) => void
+): Unsubscribe {
+  try {
+    const termsRef = collection(db, RESPONSIBILITY_TERMS_COLLECTION);
+    return onSnapshot(
+      termsRef,
+      (snapshot) => {
+        const list: ResponsibilityTerm[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ ...(docSnap.data() as ResponsibilityTerm), id: docSnap.id });
+        });
+        list.sort((a, b) => new Date(b.dataEmissao || '').getTime() - new Date(a.dataEmissao || '').getTime());
+        onTermsUpdated(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, RESPONSIBILITY_TERMS_COLLECTION);
+      }
+    );
+  } catch (err) {
+    console.error('Falha ao assinar termos de responsabilidade no Firestore:', err);
+    return () => {};
+  }
+}
+
 

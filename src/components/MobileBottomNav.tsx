@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingCart, LayoutDashboard, BarChart3, Boxes, Shield } from 'lucide-react';
+import { ShoppingCart, LayoutDashboard, BarChart3, Boxes, Shield, FileCheck } from 'lucide-react';
 import { ActiveNavTab, UserProfile } from '../types';
 import { motion } from 'motion/react';
 import { triggerHaptic } from '../utils/haptics';
@@ -70,14 +70,30 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         </span>
       ) : null,
     },
+    {
+      id: 'termo-responsabilidade' as ActiveNavTab,
+      label: 'Termos',
+      fullLabel: 'Termos TI',
+      icon: <FileCheck className="w-5 h-5" />,
+      module: 'termos',
+      badge: null,
+    },
   ];
 
   // Filter items based on user permissions
   const items = allItems.filter((item) => {
     if (isAdmin) return true;
     if (!currentUser) return true;
-    if (item.module === 'sc' && currentUser.canAccessSC === false) return false;
-    if (item.module === 'inventario' && currentUser.canAccessInventario === false) return false;
+    const perms = currentUser.permissions;
+    if (item.module === 'sc') {
+      if (currentUser.canAccessSC === false || perms?.canAccessSC === false) return false;
+    }
+    if (item.module === 'inventario') {
+      if (currentUser.canAccessInventario === false || perms?.canAccessInventario === false) return false;
+    }
+    if (item.module === 'termos') {
+      if (currentUser.canAccessTermos === false || perms?.canAccessTermos === false) return false;
+    }
     return true;
   });
 

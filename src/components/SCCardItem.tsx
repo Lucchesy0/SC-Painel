@@ -26,8 +26,42 @@ interface SCCardItemProps {
   onToggleStatus?: (sc: SC) => void;
 }
 
-export const SCCardItem: React.FC<SCCardItemProps> = memo(
-  ({ sc, permissions, onSelectSC, onEditSC, onDeleteSC, onToggleStatus }) => {
+const areSCCardPropsEqual = (prev: SCCardItemProps, next: SCCardItemProps): boolean => {
+  if (prev.sc !== next.sc) {
+    if (
+      prev.sc.id !== next.sc.id ||
+      prev.sc.numero !== next.sc.numero ||
+      prev.sc.status !== next.sc.status ||
+      prev.sc.data !== next.sc.data ||
+      prev.sc.solicitante !== next.sc.solicitante ||
+      prev.sc.observacoes !== next.sc.observacoes ||
+      prev.sc.prioridade !== next.sc.prioridade ||
+      prev.sc.dataVencimento !== next.sc.dataVencimento ||
+      prev.sc.itens !== next.sc.itens ||
+      prev.sc.comentarios !== next.sc.comentarios
+    ) {
+      return false;
+    }
+  }
+
+  if (prev.permissions !== next.permissions) return false;
+
+  return (
+    prev.onSelectSC === next.onSelectSC &&
+    prev.onEditSC === next.onEditSC &&
+    prev.onDeleteSC === next.onDeleteSC &&
+    prev.onToggleStatus === next.onToggleStatus
+  );
+};
+
+const SCCardItemComponent: React.FC<SCCardItemProps> = ({
+  sc,
+  permissions,
+  onSelectSC,
+  onEditSC,
+  onDeleteSC,
+  onToggleStatus,
+}) => {
     const [isCompletingAnim, setIsCompletingAnim] = useState(false);
     const slaSettings = useSlaSettings();
     const dias = calcDays(sc.data, sc.status);
@@ -218,7 +252,8 @@ export const SCCardItem: React.FC<SCCardItemProps> = memo(
         </div>
       </div>
     );
-  }
-);
+  };
+
+export const SCCardItem = memo(SCCardItemComponent, areSCCardPropsEqual);
 
 SCCardItem.displayName = 'SCCardItem';

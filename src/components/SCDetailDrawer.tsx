@@ -45,10 +45,10 @@ export const SCDetailDrawer: React.FC<SCDetailDrawerProps> = ({
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [showFullHistory, setShowFullHistory] = useState(false);
   const [isCompletingAnim, setIsCompletingAnim] = useState(false);
+  const slaSettings = useSlaSettings();
 
   if (!sc) return null;
 
-  const slaSettings = useSlaSettings();
   const days = calcDays(sc.data, sc.status);
   const reminder = calculateSCReminderInfo(sc, undefined, slaSettings);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Search,
   SlidersHorizontal,
@@ -110,9 +110,8 @@ export const SCTable: React.FC<SCTableProps> = ({
     localStorage.setItem('mcm_sc_grid_config', JSON.stringify(gridConfig));
   }, [gridConfig]);
 
-  // Handle hover position
-  const handleMouseMove = (e: React.MouseEvent, sc: SC) => {
-    setHoveredSC(sc);
+  // Handle hover position memoized to avoid re-renders on every mouse move
+  const handleMouseMove = useCallback((e: React.MouseEvent, sc: SC) => {
     let x = e.clientX + 15;
     let y = e.clientY + 15;
 
@@ -120,12 +119,13 @@ export const SCTable: React.FC<SCTableProps> = ({
     if (x + 280 > window.innerWidth) x = e.clientX - 295;
     if (y + 320 > window.innerHeight) y = window.innerHeight - 325;
 
+    setHoveredSC(sc);
     setHoverPos({ x, y });
-  };
+  }, []);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     setHoveredSC(null);
-  };
+  }, []);
 
   // Debounce search query to prevent lag on rapid typing
   const debouncedSearch = useDebounce(filters.search, 150);
@@ -212,7 +212,7 @@ export const SCTable: React.FC<SCTableProps> = ({
     return result;
   }, [scs, debouncedSearch, filters.status, filters.prazo, filters.sort, filters.dataInicio, filters.dataFim, filters.tipoData, slaSettings]);
 
-  const toggleColumn = (key: keyof GridConfig['visibleColumns']) => {
+  const toggleColumn = useCallback((key: keyof GridConfig['visibleColumns']) => {
     setGridConfig((prev) => ({
       ...prev,
       visibleColumns: {
@@ -220,9 +220,9 @@ export const SCTable: React.FC<SCTableProps> = ({
         [key]: !prev.visibleColumns[key],
       },
     }));
-  };
+  }, []);
 
-  const handleSortClick = (column: 'numero' | 'data' | 'solicitante' | 'status' | 'dias') => {
+  const handleSortClick = useCallback((column: 'numero' | 'data' | 'solicitante' | 'status' | 'dias') => {
     let nextSort: FilterOptions['sort'] = 'numero-desc';
     if (column === 'numero') {
       nextSort = filters.sort === 'numero-desc' ? 'numero-asc' : 'numero-desc';
@@ -236,7 +236,56 @@ export const SCTable: React.FC<SCTableProps> = ({
       nextSort = filters.sort === 'status' ? 'numero-desc' : 'status';
     }
     onFilterChange({ ...filters, sort: nextSort });
-  };
+  }, [filters, onFilterChange]);
+
+  // Memoized row action handlers to prevent SCRowItem / SCCardItem re-renders
+  const handleRowSelect = useCallback((sc: SC) => {
+    onSelectSC(sc);
+  }, [onSelectSC]);
+
+  const handleRowEdit = useCallback((sc: SC) => {
+    onEditSC(sc);
+  }, [onEditSC]);
+
+  const handleRowDelete = useCallback((id: string) => {
+    onDeleteSC(id);
+  }, [onDeleteSC]);
+
+  const handleRowToggleStatus = useCallback((sc: SC) => {
+    onToggleSCStatus?.(sc);
+  }, [onToggleSCStatus]);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onFilterChange({ ...filters, search: e.target.value });
+  }, [filters, onFilterChange]);
+
+  const handleClearSearch = useCallback(() => {
+    onFilterChange({ ...filters, search: '' });
+  }, [filters, onFilterChange]);
+
+  const handleSetViewModeTable = useCallback(() => {
+    setGridConfig((prev) => ({ ...prev, viewMode: 'table' }));
+  }, []);
+
+  const handleSetViewModeCards = useCallback(() => {
+    setGridConfig((prev) => ({ ...prev, viewMode: 'cards' }));
+  }, []);
+
+  const handleToggleFilterOpen = useCallback(() => {
+    setIsFilterOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleCustomizer = useCallback(() => {
+    setIsCustomizerOpen((prev) => !prev);
+  }, []);
+
+  const handleQuickTabClick = useCallback((prazo: FilterOptions['prazo'], status: string) => {
+    onFilterChange({
+      ...filters,
+      prazo,
+      status,
+    });
+  }, [filters, onFilterChange]);
 
   const renderSortIcon = (column: 'numero' | 'data' | 'solicitante' | 'status' | 'dias') => {
     let isCurrent = false;
@@ -282,7 +331,7 @@ export const SCTable: React.FC<SCTableProps> = ({
     (hasDateFilter ? 1 : 0);
 
   // Date Range Quick Preset Handlers
-  const handleDatePreset = (preset: 'hoje' | '7dias' | '30dias' | 'esteMes' | 'mesAnterior') => {
+  const handleDatePreset = useCallback((preset: 'hoje' | '7dias' | '30dias' | 'esteMes' | 'mesAnterior') => {
     const today = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -307,11 +356,11 @@ export const SCTable: React.FC<SCTableProps> = ({
       const end = new Date(today.getFullYear(), today.getMonth(), 0);
       onFilterChange({ ...filters, dataInicio: toISO(start), dataFim: toISO(end) });
     }
-  };
+  }, [filters, onFilterChange]);
 
-  const handleClearDateFilter = () => {
+  const handleClearDateFilter = useCallback(() => {
     onFilterChange({ ...filters, dataInicio: '', dataFim: '' });
-  };
+  }, [filters, onFilterChange]);
 
   const { totalCount, emAndamentoCount, delayedCount, vencendoBreveCount, concluidasCount } =
     useMemo(() => {
@@ -357,14 +406,14 @@ export const SCTable: React.FC<SCTableProps> = ({
               type="text"
               id="buscaSC"
               value={filters.search}
-              onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
+              onChange={handleSearchChange}
               placeholder="Buscar por SC, solicitante, item..."
               className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#2c3343] text-slate-800 dark:text-slate-100 text-xs py-1.5 pl-8 sm:pl-9 pr-7 sm:pr-8 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 dark:focus:border-orange-400 placeholder-slate-400 shadow-2xs transition-all"
             />
             {filters.search && (
               <button
                 type="button"
-                onClick={() => onFilterChange({ ...filters, search: '' })}
+                onClick={handleClearSearch}
                 title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
@@ -376,7 +425,7 @@ export const SCTable: React.FC<SCTableProps> = ({
           {/* View Mode Toggle (Table / Cards) */}
           <div className="p-0.5 rounded-xl bg-slate-200/80 dark:bg-[#202532] border border-slate-200 dark:border-slate-700 flex items-center shrink-0 h-9">
             <button
-              onClick={() => setGridConfig((prev) => ({ ...prev, viewMode: 'table' }))}
+              onClick={handleSetViewModeTable}
               title="Visualização em Tabela"
               className={`p-1.5 rounded-lg transition-colors cursor-pointer h-7.5 w-7.5 sm:w-8 flex items-center justify-center ${
                 gridConfig.viewMode === 'table'
@@ -387,7 +436,7 @@ export const SCTable: React.FC<SCTableProps> = ({
               <TableIcon className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setGridConfig((prev) => ({ ...prev, viewMode: 'cards' }))}
+              onClick={handleSetViewModeCards}
               title="Visualização em Cards"
               className={`p-1.5 rounded-lg transition-colors cursor-pointer h-7.5 w-7.5 sm:w-8 flex items-center justify-center ${
                 gridConfig.viewMode === 'cards'
@@ -401,7 +450,7 @@ export const SCTable: React.FC<SCTableProps> = ({
 
           {/* Filter Drawer Toggle */}
           <button
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            onClick={handleToggleFilterOpen}
             title="Filtros avançados"
             className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs ${
               isFilterOpen || activeFilterCount > 0
@@ -421,7 +470,7 @@ export const SCTable: React.FC<SCTableProps> = ({
           {/* Desktop Only Actions (Columns / Import RM / Export / Nova SC) */}
           <div className="hidden sm:flex items-center gap-1.5 shrink-0">
             <button
-              onClick={() => setIsCustomizerOpen(!isCustomizerOpen)}
+              onClick={handleToggleCustomizer}
               title="Personalizar Colunas"
               className={`h-9 px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs ${
                 isCustomizerOpen
@@ -491,13 +540,7 @@ export const SCTable: React.FC<SCTableProps> = ({
                 return (
                   <button
                     key={tab.id}
-                    onClick={() =>
-                      onFilterChange({
-                        ...filters,
-                        prazo: tab.prazo as FilterOptions['prazo'],
-                        status: tab.status,
-                      })
-                    }
+                    onClick={() => handleQuickTabClick(tab.prazo as FilterOptions['prazo'], tab.status)}
                     className={`relative z-10 px-2.5 sm:px-3 py-1 rounded-lg transition-all cursor-pointer text-xs flex items-center gap-1.5 min-h-[28px] sm:min-h-[30px] ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 font-bold'
@@ -1087,10 +1130,10 @@ export const SCTable: React.FC<SCTableProps> = ({
                     gridConfig={gridConfig}
                     cellPadding={cellPadding}
                     permissions={permissions}
-                    onSelectSC={onSelectSC}
-                    onEditSC={onEditSC}
-                    onDeleteSC={onDeleteSC}
-                    onToggleStatus={onToggleSCStatus}
+                    onSelectSC={handleRowSelect}
+                    onEditSC={handleRowEdit}
+                    onDeleteSC={handleRowDelete}
+                    onToggleStatus={handleRowToggleStatus}
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}
                   />
@@ -1150,10 +1193,10 @@ export const SCTable: React.FC<SCTableProps> = ({
                 key={sc.id}
                 sc={sc}
                 permissions={permissions}
-                onSelectSC={onSelectSC}
-                onEditSC={onEditSC}
-                onDeleteSC={onDeleteSC}
-                onToggleStatus={onToggleSCStatus}
+                onSelectSC={handleRowSelect}
+                onEditSC={handleRowEdit}
+                onDeleteSC={handleRowDelete}
+                onToggleStatus={handleRowToggleStatus}
               />
             ))
           )}

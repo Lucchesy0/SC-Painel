@@ -15,6 +15,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { SC, SCItem, SCStatus, SCTipo, UserProfile } from '../types';
+import { isUserOnline } from '../services/authService';
 
 interface SCModalProps {
   isOpen: boolean;
@@ -68,26 +69,35 @@ export const SCModal: React.FC<SCModalProps> = ({
       cargo: u.cargo || u.departamento || 'Colaborador',
       departamento: u.departamento,
       avatarColor: u.avatarColor || 'bg-slate-700',
+      isOnline: isUserOnline(u, currentUser),
     }));
-  }, [users]);
+  }, [users, currentUser]);
 
   // Find currently selected profile object for the visual card
   const selectedProfile = useMemo(() => {
     if (!solicitante) return null;
-    return (
-      profileRequesters.find(
-        (p) =>
-          p.name.toLowerCase() === solicitante.toLowerCase() ||
-          solicitante.toLowerCase().includes(p.name.toLowerCase())
-      ) || {
-        id: 'custom',
-        name: solicitante,
-        cargo: 'Solicitante Registrado',
-        departamento: '',
-        avatarColor: 'bg-slate-700',
-      }
+    const found = profileRequesters.find(
+      (p) =>
+        p.name.toLowerCase() === solicitante.toLowerCase() ||
+        solicitante.toLowerCase().includes(p.name.toLowerCase())
     );
-  }, [solicitante, profileRequesters]);
+    if (found) return found;
+
+    // Custom typed solicitante
+    const isCustomOnline = Boolean(
+      currentUser?.nome &&
+      solicitante.toLowerCase().trim() === currentUser.nome.toLowerCase().trim()
+    );
+
+    return {
+      id: 'custom',
+      name: solicitante,
+      cargo: 'Solicitante Registrado',
+      departamento: '',
+      avatarColor: 'bg-slate-700',
+      isOnline: isCustomOnline,
+    };
+  }, [solicitante, profileRequesters, currentUser]);
 
   // Filtered profiles for search
   const filteredProfiles = useMemo(() => {
@@ -116,8 +126,24 @@ export const SCModal: React.FC<SCModalProps> = ({
     };
   }, [isProfileDropdownOpen]);
 
+  const isInitializedRef = useRef(false);
+  const prevEditingSCIdRef = useRef<string | null>(null);
+
+  // Sync state on open/edit - ONLY when opening or changing edited SC
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      isInitializedRef.current = false;
+      prevEditingSCIdRef.current = null;
+      return;
+    }
+
+    const currentEditingId = editingSC?.id || null;
+    const shouldInitialize = !isInitializedRef.current || currentEditingId !== prevEditingSCIdRef.current;
+
+    if (shouldInitialize) {
+      isInitializedRef.current = true;
+      prevEditingSCIdRef.current = currentEditingId;
+
       if (editingSC) {
         setNumero(editingSC.numero || '');
         setData(editingSC.data || new Date().toISOString().split('T')[0]);
@@ -134,21 +160,49 @@ export const SCModal: React.FC<SCModalProps> = ({
             : []
         );
       } else {
-        const todayStr = new Date().toISOString().split('T')[0];
-        setNumero('');
-        setData(todayStr);
-        setTipo('Item');
-        setStatus('Em andamento');
-        setObservacoes('');
-        setItens([]);
+        // Try restoring draft from current session if exists
+        let restoredFromDraft = false;
+        try {
+          const savedDraft = sessionStorage.getItem('mcm_sc_draft');
+          if (savedDraft) {
+            const draft = JSON.parse(savedDraft);
+            if (draft && typeof draft === 'object') {
+              if (draft.numero !== undefined) setNumero(draft.numero);
+              if (draft.data) setData(draft.data);
+              if (draft.solicitante) setSolicitante(draft.solicitante);
+              if (draft.tipo) setTipo(draft.tipo);
+              if (draft.status) setStatus(draft.status);
+              if (draft.observacoes !== undefined) setObservacoes(draft.observacoes);
+              if (Array.isArray(draft.itens)) setItens(draft.itens);
+              if (draft.itemDesc) setItemDesc(draft.itemDesc);
+              if (draft.itemQtd) setItemQtd(draft.itemQtd);
+              if (draft.itemUni) setItemUni(draft.itemUni);
+              if (draft.itemValor) setItemValor(draft.itemValor);
+              restoredFromDraft = true;
+            }
+          }
+        } catch (e) {
+          // ignore draft parse error
+        }
 
-        // Default to current logged-in profile if valid, otherwise first available profile
-        if (currentUser && currentUser.role !== 'kiosk' && !currentUser.isKiosk && currentUser.nome) {
-          setSolicitante(currentUser.nome);
-        } else if (profileRequesters.length > 0) {
-          setSolicitante(profileRequesters[0].name);
-        } else {
-          setSolicitante('Luchesy (Admin)');
+        if (!restoredFromDraft) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          setNumero('');
+          setData(todayStr);
+          setTipo('Item');
+          setStatus('Em andamento');
+          setObservacoes('');
+          setItens([]);
+
+          // Default to current logged-in profile if valid, otherwise first available profile
+          if (currentUser && currentUser.role !== 'kiosk' && !currentUser.isKiosk && currentUser.nome) {
+            setSolicitante(currentUser.nome);
+          } else if (users && users.length > 0) {
+            const valid = users.find((u) => u.role !== 'kiosk' && !u.isKiosk && u.nome);
+            setSolicitante(valid ? valid.nome : 'Luchesy (Admin)');
+          } else {
+            setSolicitante('Luchesy (Admin)');
+          }
         }
       }
 
@@ -161,7 +215,56 @@ export const SCModal: React.FC<SCModalProps> = ({
       setIsProfileDropdownOpen(false);
       setProfileSearchQuery('');
     }
-  }, [isOpen, editingSC, currentUser, profileRequesters]);
+  }, [isOpen, editingSC?.id]);
+
+  // Auto-save draft in session storage while typing a new SC so background reloads never lose progress
+  useEffect(() => {
+    if (isOpen && !editingSC && isInitializedRef.current) {
+      try {
+        const draft = {
+          numero,
+          data,
+          solicitante,
+          tipo,
+          status,
+          observacoes,
+          itens,
+          itemDesc,
+          itemQtd,
+          itemUni,
+          itemValor,
+        };
+        sessionStorage.setItem('mcm_sc_draft', JSON.stringify(draft));
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+  }, [
+    isOpen,
+    editingSC,
+    numero,
+    data,
+    solicitante,
+    tipo,
+    status,
+    observacoes,
+    itens,
+    itemDesc,
+    itemQtd,
+    itemUni,
+    itemValor,
+  ]);
+
+  const clearDraft = () => {
+    try {
+      sessionStorage.removeItem('mcm_sc_draft');
+    } catch (e) {}
+  };
+
+  const handleClose = () => {
+    clearDraft();
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -290,6 +393,7 @@ export const SCModal: React.FC<SCModalProps> = ({
       ...(observacoes.trim() ? { observacoes: observacoes.trim(), comentarios: observacoes.trim() } : {}),
     };
 
+    clearDraft();
     onSave(payload, editingSC?.id);
   };
 
@@ -321,7 +425,7 @@ export const SCModal: React.FC<SCModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Fechar"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition cursor-pointer"
           >
@@ -388,21 +492,39 @@ export const SCModal: React.FC<SCModalProps> = ({
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {/* Avatar Icon with Online Green Dot */}
+                    {/* Avatar Icon with Online Green Dot or Offline Red Dot */}
                     <div
                       className={`w-7.5 h-7.5 rounded-lg ${
                         selectedProfile?.avatarColor || 'bg-slate-800'
                       } text-white flex items-center justify-center font-bold text-xs shrink-0 relative shadow-2xs`}
                     >
                       {selectedProfile?.name ? selectedProfile.name.charAt(0).toUpperCase() : 'U'}
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-emerald-500" />
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+                          selectedProfile?.isOnline ? 'bg-emerald-500' : 'bg-rose-500'
+                        }`}
+                        title={selectedProfile?.isOnline ? 'Perfil Online' : 'Perfil Offline'}
+                      />
                     </div>
 
                     {/* Name and Role Subtitle */}
                     <div className="flex flex-col min-w-0 leading-tight">
-                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                        {selectedProfile?.name || 'Selecione o perfil...'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {selectedProfile?.name || 'Selecione o perfil...'}
+                        </span>
+                        {selectedProfile?.name && (
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${
+                              selectedProfile.isOnline
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                            }`}
+                          >
+                            {selectedProfile.isOnline ? 'Online' : 'Offline'}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                         {selectedProfile?.cargo || 'Colaborador'}
                       </span>
@@ -468,10 +590,26 @@ export const SCModal: React.FC<SCModalProps> = ({
                                   } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
                                 >
                                   {prof.name.charAt(0).toUpperCase()}
-                                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900 bg-emerald-500" />
+                                  <span
+                                    className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+                                      prof.isOnline ? 'bg-emerald-500' : 'bg-rose-500'
+                                    }`}
+                                    title={prof.isOnline ? 'Perfil Online' : 'Perfil Offline'}
+                                  />
                                 </div>
                                 <div className="flex flex-col min-w-0 leading-tight">
-                                  <span className="text-xs font-bold truncate">{prof.name}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold truncate">{prof.name}</span>
+                                    <span
+                                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${
+                                        prof.isOnline
+                                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                          : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                      }`}
+                                    >
+                                      {prof.isOnline ? 'Online' : 'Offline'}
+                                    </span>
+                                  </div>
                                   <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                                     {prof.cargo}
                                   </span>
@@ -858,7 +996,7 @@ export const SCModal: React.FC<SCModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             >
               Cancelar

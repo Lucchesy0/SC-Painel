@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Boxes, Tag, MapPin, Plus, Check, Trash2, AlertCircle } from 'lucide-react';
 import { Equipment, EquipmentStatus } from '../types';
 import { triggerHaptic } from '../utils/haptics';
@@ -64,9 +64,24 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
   const [newLocationName, setNewLocationName] = useState('');
 
-  // Sync state on open/edit
+  const isInitializedRef = useRef(false);
+  const prevEqIdRef = useRef<string | null>(null);
+
+  // Sync state on open/edit - ONLY when opening or changing edited equipment
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      isInitializedRef.current = false;
+      prevEqIdRef.current = null;
+      return;
+    }
+
+    const currentEqId = editingEquipment?.id || null;
+    const shouldInitialize = !isInitializedRef.current || currentEqId !== prevEqIdRef.current;
+
+    if (shouldInitialize) {
+      isInitializedRef.current = true;
+      prevEqIdRef.current = currentEqId;
+
       // Clean legacy defaults from previous sessions
       try {
         localStorage.removeItem('mcm_inventory_categories');
@@ -141,7 +156,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       setNewCategoryName('');
       setNewLocationName('');
     }
-  }, [isOpen, editingEquipment]);
+  }, [isOpen, editingEquipment?.id]);
 
   if (!isOpen) return null;
 
