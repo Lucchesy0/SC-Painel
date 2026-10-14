@@ -3,9 +3,19 @@
   "name": "Portal MCM",
   "icons": [
     {
-      "src": "/logo-mcm.png",
+      "src": "/favicon-32x32.png",
       "type": "image/png",
-      "sizes": "192x192 512x512"
+      "sizes": "32x32"
+    },
+    {
+      "src": "/logo-mcm-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/logo-mcm-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
   ],
   "start_url": "/",

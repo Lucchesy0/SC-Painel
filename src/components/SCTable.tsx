@@ -21,8 +21,16 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  CheckSquare,
 } from 'lucide-react';
-import { SC, FilterOptions, GridConfig, RolePermissions, UserProfile } from '../types';
+import { SC, FilterOptions, GridConfig, RolePermissions, UserProfile, SCStatus } from '../types';
 import { calcDays, formatDateBR, isSCInDateRange, compareSCNumbers } from '../utils/storage';
 import { useSlaSettings, isSCDelayed, isSCDueSoon, calculateSCReminderInfo } from '../utils/sla';
 import { motion, AnimatePresence } from 'motion/react';
@@ -35,6 +43,7 @@ interface SCTableProps {
   filters: FilterOptions;
   permissions?: RolePermissions;
   currentUser?: UserProfile;
+  loading?: boolean;
   isRefreshing?: boolean;
   onRefreshLive?: () => void;
   onFilterChange: (filters: FilterOptions) => void;
@@ -45,7 +54,11 @@ interface SCTableProps {
   onOpenImportRM?: () => void;
   onExportCSV?: () => void;
   onOpenAddSC?: () => void;
+  onOpenAIPrintImport?: () => void;
   onOpenKioskMode?: () => void;
+  onBatchUpdateStatus?: (scs: SC[], newStatus: SCStatus) => void;
+  onBatchDelete?: (ids: string[]) => void;
+  onBatchExport?: (scs: SC[]) => void;
 }
 
 const DEFAULT_GRID_CONFIG: GridConfig = {
@@ -62,11 +75,174 @@ const DEFAULT_GRID_CONFIG: GridConfig = {
   },
 };
 
+// --- SKELETON LOADERS COM IDENTIDADE CORPORATIVA MCM ---
+const SCTableSkeletonRows: React.FC<{ count?: number; gridConfig: GridConfig; cellPadding: string }> = ({
+  count = 7,
+  gridConfig,
+  cellPadding,
+}) => {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, idx) => (
+        <tr
+          key={`sc-skeleton-row-${idx}`}
+          className="border-b border-slate-100 dark:border-slate-700/40 bg-white/40 dark:bg-slate-800/20"
+        >
+          {/* Checkbox column */}
+          <td className="w-10 px-3 py-2 text-center">
+            <div className="w-4 h-4 mx-auto rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-700/60 animate-pulse" />
+          </td>
+
+          {/* Número column */}
+          {gridConfig.visibleColumns.numero && (
+            <td className={cellPadding}>
+              <div
+                className="h-5 w-16 rounded-md bg-orange-500/15 dark:bg-orange-500/20 border border-orange-500/20 animate-pulse"
+                style={{ animationDelay: `${idx * 60}ms` }}
+              />
+            </td>
+          )}
+
+          {/* Data column */}
+          {gridConfig.visibleColumns.data && (
+            <td className={cellPadding}>
+              <div
+                className="h-4 w-20 rounded bg-slate-200/80 dark:bg-slate-700/60 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 20}ms` }}
+              />
+            </td>
+          )}
+
+          {/* Solicitante column */}
+          {gridConfig.visibleColumns.solicitante && (
+            <td className={cellPadding}>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700/70 shrink-0 animate-pulse"
+                  style={{ animationDelay: `${idx * 60 + 40}ms` }}
+                />
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div
+                    className="h-3.5 w-36 sm:w-44 rounded bg-slate-200/90 dark:bg-slate-700/70 animate-pulse"
+                    style={{ animationDelay: `${idx * 60 + 50}ms` }}
+                  />
+                  <div
+                    className="h-2.5 w-20 sm:w-28 rounded bg-slate-100 dark:bg-slate-700/40 animate-pulse"
+                    style={{ animationDelay: `${idx * 60 + 70}ms` }}
+                  />
+                </div>
+              </div>
+            </td>
+          )}
+
+          {/* Status column */}
+          {gridConfig.visibleColumns.status && (
+            <td className={cellPadding}>
+              <div
+                className="h-5 w-24 rounded-full bg-slate-200/80 dark:bg-slate-700/60 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 80}ms` }}
+              />
+            </td>
+          )}
+
+          {/* Itens column */}
+          {gridConfig.visibleColumns.itens && (
+            <td className={cellPadding}>
+              <div
+                className="h-4 w-8 rounded-md bg-slate-200/70 dark:bg-slate-700/50 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 90}ms` }}
+              />
+            </td>
+          )}
+
+          {/* Dias column */}
+          {gridConfig.visibleColumns.dias && (
+            <td className={cellPadding}>
+              <div
+                className="h-5 w-16 rounded-full bg-slate-200/70 dark:bg-slate-700/50 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 100}ms` }}
+              />
+            </td>
+          )}
+
+          {/* Prioridade column */}
+          {gridConfig.visibleColumns.prioridade && (
+            <td className={cellPadding}>
+              <div
+                className="h-4 w-12 rounded bg-slate-200/70 dark:bg-slate-700/50 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 110}ms` }}
+              />
+            </td>
+          )}
+
+          {/* Ações column */}
+          <td className="px-4 py-2 text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <div
+                className="w-6 h-6 rounded-lg bg-slate-200/70 dark:bg-slate-700/50 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 120}ms` }}
+              />
+              <div
+                className="w-6 h-6 rounded-lg bg-slate-200/70 dark:bg-slate-700/50 animate-pulse"
+                style={{ animationDelay: `${idx * 60 + 130}ms` }}
+              />
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+};
+
+const SCCardSkeleton: React.FC<{ count?: number }> = ({ count = 6 }) => {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, idx) => (
+        <div
+          key={`sc-card-skeleton-${idx}`}
+          className="p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/70 dark:bg-[#1a202c]/70 shadow-xs flex flex-col gap-3 animate-pulse"
+        >
+          {/* Card Header */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700" />
+              <div
+                className="h-5 w-20 rounded-md bg-orange-500/15 dark:bg-orange-500/20 border border-orange-500/20"
+                style={{ animationDelay: `${idx * 60}ms` }}
+              />
+            </div>
+            <div
+              className="h-5 w-24 rounded-full bg-slate-200/80 dark:bg-slate-700/60"
+              style={{ animationDelay: `${idx * 60 + 40}ms` }}
+            />
+          </div>
+
+          {/* Requester & details */}
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 shrink-0" />
+            <div className="flex-1 flex flex-col gap-1">
+              <div className="h-3.5 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-2.5 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
+            </div>
+          </div>
+
+          {/* Footer badge and date */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+            <div className="h-4 w-20 rounded bg-slate-200 dark:bg-slate-700" />
+            <div className="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+};
+
 export const SCTable: React.FC<SCTableProps> = ({
   scs,
   filters,
   permissions,
   currentUser,
+  loading = false,
   isRefreshing = false,
   onRefreshLive,
   onFilterChange,
@@ -77,7 +253,11 @@ export const SCTable: React.FC<SCTableProps> = ({
   onOpenImportRM,
   onExportCSV,
   onOpenAddSC,
+  onOpenAIPrintImport,
   onOpenKioskMode,
+  onBatchUpdateStatus,
+  onBatchDelete,
+  onBatchExport,
 }) => {
   const slaSettings = useSlaSettings();
   const windowDays = Math.max(2, Math.min(5, Math.ceil(slaSettings.slaDaysWarning * 0.3)));
@@ -209,8 +389,132 @@ export const SCTable: React.FC<SCTableProps> = ({
       return compareSCNumbers(a.numero, b.numero, 'desc');
     });
 
-    return result;
+    // Garantir unicidade absoluta de cada SC pelo ID para prevenir colisão de chaves React
+    const uniqueMap = new Map<string, SC>();
+    for (const sc of result) {
+      if (sc && sc.id && !uniqueMap.has(sc.id)) {
+        uniqueMap.set(sc.id, sc);
+      }
+    }
+    return Array.from(uniqueMap.values());
   }, [scs, debouncedSearch, filters.status, filters.prazo, filters.sort, filters.dataInicio, filters.dataFim, filters.tipoData, slaSettings]);
+
+  // --- PAGINAÇÃO E CONTROLE DE RENDIMENTO DO DOM ---
+  const [pageSize, setPageSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('mcm_sc_page_size');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if ([25, 50, 100, 0].includes(val)) return val;
+      }
+    } catch {}
+    return 25; // Padrão de alto desempenho: 25 itens por página
+  });
+
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Resetar página quando filtros mudam
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, debouncedSearch]);
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    try {
+      localStorage.setItem('mcm_sc_page_size', String(newSize));
+    } catch {}
+  };
+
+  const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  // Lista fatiada para a página atual (renderização ultra rápida do DOM)
+  const pagedSCs = useMemo(() => {
+    if (pageSize === 0) return filtered;
+    const startIndex = (validCurrentPage - 1) * pageSize;
+    return filtered.slice(startIndex, startIndex + pageSize);
+  }, [filtered, validCurrentPage, pageSize]);
+
+  // --- SELEÇÃO MÚLTIPLA E AÇÕES EM LOTE ---
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Limpar IDs selecionados que não existem mais na base
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const validIds = new Set(scs.map((s) => s.id));
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [scs]);
+
+  const handleToggleSelectRow = useCallback((id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const isAllPageSelected = pagedSCs.length > 0 && pagedSCs.every((sc) => selectedIds.has(sc.id));
+  const isSomePageSelected = pagedSCs.some((sc) => selectedIds.has(sc.id));
+  const isIndeterminate = !isAllPageSelected && isSomePageSelected;
+
+  const handleToggleSelectAllPage = useCallback(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllPageSelected) {
+        pagedSCs.forEach((sc) => next.delete(sc.id));
+      } else {
+        pagedSCs.forEach((sc) => next.add(sc.id));
+      }
+      return next;
+    });
+  }, [isAllPageSelected, pagedSCs]);
+
+  const handleSelectAllFiltered = useCallback(() => {
+    setSelectedIds(new Set(filtered.map((s) => s.id)));
+  }, [filtered]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectedSCs = useMemo(() => {
+    return scs.filter((s) => selectedIds.has(s.id));
+  }, [scs, selectedIds]);
+
+  const handleBatchComplete = () => {
+    if (selectedSCs.length === 0) return;
+    onBatchUpdateStatus?.(selectedSCs, 'Concluído');
+    handleClearSelection();
+  };
+
+  const handleBatchReopen = () => {
+    if (selectedSCs.length === 0) return;
+    onBatchUpdateStatus?.(selectedSCs, 'Em andamento');
+    handleClearSelection();
+  };
+
+  const handleBatchExportSelected = () => {
+    if (selectedSCs.length === 0) return;
+    onBatchExport?.(selectedSCs);
+  };
+
+  const handleBatchDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    onBatchDelete?.(Array.from(selectedIds));
+    handleClearSelection();
+  };
 
   const toggleColumn = useCallback((key: keyof GridConfig['visibleColumns']) => {
     setGridConfig((prev) => ({
@@ -508,6 +812,19 @@ export const SCTable: React.FC<SCTableProps> = ({
               </button>
             )}
 
+            {onOpenAIPrintImport && (
+              <button
+                type="button"
+                onClick={onOpenAIPrintImport}
+                id="btnTableImportAIPrintDesktop"
+                title="Criar SC colando ou enviando um print da tela com IA"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-blue-200 dark:border-blue-800/80 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 active:scale-95 transition-all cursor-pointer shadow-2xs shrink-0 h-9"
+              >
+                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Importar Print (IA)</span>
+              </button>
+            )}
+
             {onOpenAddSC && (
               <button
                 type="button"
@@ -579,6 +896,19 @@ export const SCTable: React.FC<SCTableProps> = ({
               >
                 <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
                 <span>Nova SC</span>
+              </button>
+            )}
+
+            {onOpenAIPrintImport && (
+              <button
+                type="button"
+                onClick={onOpenAIPrintImport}
+                id="btnTableImportAIPrintMobile"
+                title="Criar SC por Print (IA)"
+                className="inline-flex items-center justify-center gap-1 px-2.5 py-2 text-xs font-bold rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 active:bg-blue-100 shadow-2xs cursor-pointer h-8.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span>Print (IA)</span>
               </button>
             )}
 
@@ -966,10 +1296,68 @@ export const SCTable: React.FC<SCTableProps> = ({
 
       {/* Grid Content: Table Mode vs Cards Mode */}
       {gridConfig.viewMode === 'table' ? (
-        <div className="overflow-x-auto overflow-y-auto touch-scroll max-h-[620px] min-h-[250px] relative custom-scrollbar">
+        <div className="overflow-x-auto overflow-y-auto touch-scroll max-h-[620px] min-h-[250px] relative custom-scrollbar flex flex-col">
+          {/* Banner de Seleção de Todas as Páginas */}
+          {isAllPageSelected && filtered.length > pagedSCs.length && (
+            <div className="bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-900/60 px-4 py-2 text-xs text-orange-900 dark:text-orange-200 flex items-center justify-between flex-wrap gap-2 animate-in fade-in sticky left-0 z-20">
+              <span>
+                Todas as <strong>{pagedSCs.length}</strong> solicitações desta página estão selecionadas.
+              </span>
+              {selectedIds.size < filtered.length ? (
+                <button
+                  type="button"
+                  onClick={handleSelectAllFiltered}
+                  className="font-bold text-orange-700 dark:text-orange-300 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>Selecionar todas as {filtered.length} solicitações correspondentes aos filtros</span>
+                </button>
+              ) : (
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  ✓ Todas as {filtered.length} solicitações selecionadas!
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Corporate MCM Loading Progress Bar */}
+          <AnimatePresence>
+            {(loading || isRefreshing) && (
+              <motion.div
+                key="table-loading-bar"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 3 }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="w-full bg-orange-100 dark:bg-orange-950/40 overflow-hidden relative z-20 shrink-0"
+              >
+                <motion.div
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '100%' }}
+                  transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
+                  className="h-full w-1/2 bg-gradient-to-r from-transparent via-orange-500 to-transparent"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <table className="w-full text-left whitespace-nowrap border-collapse min-w-[700px]">
             <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-[#1a1e28] text-slate-600 dark:text-slate-200 font-medium border-b border-slate-200 dark:border-slate-500/50 text-xs shadow-xs">
               <tr>
+                {/* Master Checkbox Header */}
+                <th className="w-10 px-3 py-3 text-center select-none">
+                  <input
+                    type="checkbox"
+                    checked={isAllPageSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isIndeterminate;
+                    }}
+                    onChange={handleToggleSelectAllPage}
+                    title={isAllPageSelected ? 'Desmarcar itens desta página' : 'Selecionar itens desta página'}
+                    aria-label="Selecionar todas as solicitações da página"
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-orange-600 focus:ring-orange-500/30 cursor-pointer accent-orange-600 transition-transform active:scale-90"
+                  />
+                </th>
                 {gridConfig.visibleColumns.numero && (
                   <th
                     onClick={() => handleSortClick('numero')}
@@ -1077,131 +1465,417 @@ export const SCTable: React.FC<SCTableProps> = ({
                 <th className="px-4 py-3 font-semibold text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-600/40" id="listaSC">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-10 sm:py-12 text-center">
-                    {scs.length === 0 ? (
-                      <div className="max-w-md mx-auto flex flex-col items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-2xs">
-                          <FileSpreadsheet className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
-                            Base de Solicitações Limpa
-                          </h3>
-                          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Importe sua planilha do RM / Excel ou cadastre solicitações manualmente.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          {onOpenImportRM && (
-                            <button
-                              type="button"
-                              onClick={onOpenImportRM}
-                              className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors active:scale-95"
-                            >
-                              <FileSpreadsheet className="w-3.5 h-3.5" /> Importar RM
-                            </button>
-                          )}
-                          {onOpenAddSC && (
-                            <button
-                              type="button"
-                              onClick={onOpenAddSC}
-                              className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs active:scale-95"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Nova SC
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-slate-400 dark:text-slate-500 text-xs">
-                        Nenhuma solicitação encontrada com os filtros atuais.
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((sc) => (
-                  <SCRowItem
-                    key={sc.id}
-                    sc={sc}
+            <AnimatePresence mode="wait">
+              {loading ? (
+                <motion.tbody
+                  key="table-skeleton-body"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="divide-y divide-slate-100 dark:divide-slate-700/40"
+                >
+                  <SCTableSkeletonRows
+                    count={Math.min(pageSize === 0 ? 8 : pageSize, 8)}
                     gridConfig={gridConfig}
                     cellPadding={cellPadding}
-                    permissions={permissions}
-                    onSelectSC={handleRowSelect}
-                    onEditSC={handleRowEdit}
-                    onDeleteSC={handleRowDelete}
-                    onToggleStatus={handleRowToggleStatus}
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
                   />
-                ))
+                </motion.tbody>
+              ) : (
+                <motion.tbody
+                  key={`table-loaded-${validCurrentPage}-${debouncedSearch}-${filters.status}-${filters.prazo}`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                  className="divide-y divide-slate-100 dark:divide-slate-600/40"
+                  id="listaSC"
+                >
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 sm:py-12 text-center">
+                        {scs.length === 0 ? (
+                          <div className="max-w-md mx-auto flex flex-col items-center gap-2.5">
+                            <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-2xs">
+                              <FileSpreadsheet className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+                                Base de Solicitações Limpa
+                              </h3>
+                              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Importe sua planilha do RM / Excel ou cadastre solicitações manualmente.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {onOpenImportRM && (
+                                <button
+                                  type="button"
+                                  onClick={onOpenImportRM}
+                                  className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors active:scale-95"
+                                >
+                                  <FileSpreadsheet className="w-3.5 h-3.5" /> Importar RM
+                                </button>
+                              )}
+                              {onOpenAddSC && (
+                                <button
+                                  type="button"
+                                  onClick={onOpenAddSC}
+                                  className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs active:scale-95"
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Nova SC
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-slate-400 dark:text-slate-500 text-xs">
+                            Nenhuma solicitação encontrada com os filtros atuais.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedSCs.map((sc, idx) => (
+                      <SCRowItem
+                        key={sc.id || `sc-row-${idx}`}
+                        sc={sc}
+                        gridConfig={gridConfig}
+                        cellPadding={cellPadding}
+                        permissions={permissions}
+                        isSelected={selectedIds.has(sc.id)}
+                        onToggleSelect={handleToggleSelectRow}
+                        onSelectSC={handleRowSelect}
+                        onEditSC={handleRowEdit}
+                        onDeleteSC={handleRowDelete}
+                        onToggleStatus={handleRowToggleStatus}
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
+                      />
+                    ))
+                  )}
+                </motion.tbody>
               )}
-            </tbody>
+            </AnimatePresence>
           </table>
         </div>
       ) : (
         /* Cards in Grid View Mode */
-        <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[620px] overflow-y-auto min-h-[200px] custom-scrollbar">
-          {filtered.length === 0 ? (
-            <div className="col-span-full py-10 sm:py-12 text-center">
-              {scs.length === 0 ? (
-                <div className="max-w-md mx-auto flex flex-col items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-2xs">
-                    <FileSpreadsheet className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
-                      Base de Solicitações Limpa
-                    </h3>
-                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Importe sua planilha do RM / Excel ou cadastre solicitações manualmente.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    {onOpenImportRM && (
-                      <button
-                        type="button"
-                        onClick={onOpenImportRM}
-                        className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors active:scale-95"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5" /> Importar RM
-                      </button>
-                    )}
-                    {onOpenAddSC && (
-                      <button
-                        type="button"
-                        onClick={onOpenAddSC}
-                        className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs active:scale-95"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Nova SC
-                      </button>
-                    )}
-                  </div>
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <motion.div
+              key="cards-skeleton-body"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[620px] overflow-y-auto min-h-[200px] custom-scrollbar"
+            >
+              <SCCardSkeleton count={Math.min(pageSize === 0 ? 6 : pageSize, 6)} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key={`cards-loaded-${validCurrentPage}-${debouncedSearch}-${filters.status}-${filters.prazo}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 max-h-[620px] overflow-y-auto min-h-[200px] custom-scrollbar"
+            >
+              {filtered.length === 0 ? (
+                <div className="col-span-full py-10 sm:py-12 text-center">
+                  {scs.length === 0 ? (
+                    <div className="max-w-md mx-auto flex flex-col items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-2xs">
+                        <FileSpreadsheet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+                          Base de Solicitações Limpa
+                        </h3>
+                        <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Importe sua planilha do RM / Excel ou cadastre solicitações manualmente.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {onOpenImportRM && (
+                          <button
+                            type="button"
+                            onClick={onOpenImportRM}
+                            className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors active:scale-95"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" /> Importar RM
+                          </button>
+                        )}
+                        {onOpenAddSC && (
+                          <button
+                            type="button"
+                            onClick={onOpenAddSC}
+                            className="h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs active:scale-95"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Nova SC
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-slate-400 dark:text-slate-500 text-xs">
+                      Nenhuma solicitação encontrada com os filtros atuais.
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="text-slate-400 dark:text-slate-500 text-xs">
-                  Nenhuma solicitação encontrada com os filtros atuais.
-                </div>
+                pagedSCs.map((sc, idx) => (
+                  <SCCardItem
+                    key={sc.id || `sc-card-${idx}`}
+                    sc={sc}
+                    permissions={permissions}
+                    isSelected={selectedIds.has(sc.id)}
+                    onToggleSelect={handleToggleSelectRow}
+                    onSelectSC={handleRowSelect}
+                    onEditSC={handleRowEdit}
+                    onDeleteSC={handleRowDelete}
+                    onToggleStatus={handleRowToggleStatus}
+                  />
+                ))
               )}
-            </div>
-          ) : (
-            filtered.map((sc) => (
-              <SCCardItem
-                key={sc.id}
-                sc={sc}
-                permissions={permissions}
-                onSelectSC={handleRowSelect}
-                onEditSC={handleRowEdit}
-                onDeleteSC={handleRowDelete}
-                onToggleStatus={handleRowToggleStatus}
-              />
-            ))
+            </motion.div>
           )}
+        </AnimatePresence>
+      )}
+
+      {/* Rodapé de Paginação & Densidade de Informações */}
+      {filtered.length > 0 && (
+        <div className="px-3.5 py-3 border-t border-slate-200/90 dark:border-slate-700/80 bg-slate-50/80 dark:bg-[#1a202c]/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          {/* Informações da página e Total */}
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+            <span>
+              Exibindo{' '}
+              <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                {pageSize === 0 ? 1 : (validCurrentPage - 1) * pageSize + 1}
+              </strong>{' '}
+              a{' '}
+              <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                {pageSize === 0 ? filtered.length : Math.min(validCurrentPage * pageSize, filtered.length)}
+              </strong>{' '}
+              de{' '}
+              <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                {filtered.length}
+              </strong>{' '}
+              solicitações
+              {filtered.length !== scs.length && (
+                <span className="text-[11px] text-slate-400 ml-1">
+                  (total geral: {scs.length})
+                </span>
+              )}
+            </span>
+          </div>
+
+          {/* Controles de Navegação de Página e Tamanho */}
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            {/* Seletor de Itens por Página */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400">Exibir:</span>
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] p-0.5">
+                {[25, 50, 100, 0].map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => handlePageSizeChange(size)}
+                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                      pageSize === size
+                        ? 'bg-orange-500 text-white shadow-2xs font-bold'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-orange-600'
+                    }`}
+                  >
+                    {size === 0 ? 'Todas' : size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Botões de Página (quando não for 'Todas') */}
+            {pageSize !== 0 && totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                {/* Primeira Página */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={validCurrentPage === 1}
+                  title="Primeira Página"
+                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-600 dark:text-slate-300 hover:border-orange-400 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronsLeft className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Página Anterior */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={validCurrentPage === 1}
+                  title="Página Anterior"
+                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-600 dark:text-slate-300 hover:border-orange-400 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Números de Página Inteligentes */}
+                <div className="flex items-center gap-1 px-1">
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    if (totalPages <= 7) {
+                      for (let i = 1; i <= totalPages; i++) pages.push(i);
+                    } else {
+                      pages.push(1);
+                      if (validCurrentPage > 3) pages.push('...');
+                      const start = Math.max(2, validCurrentPage - 1);
+                      const end = Math.min(totalPages - 1, validCurrentPage + 1);
+                      for (let i = start; i <= end; i++) pages.push(i);
+                      if (validCurrentPage < totalPages - 2) pages.push('...');
+                      pages.push(totalPages);
+                    }
+
+                    return pages.map((page, idx) => {
+                      if (page === '...') {
+                        return (
+                          <span key={`dots-${idx}`} className="px-1 text-slate-400 text-xs select-none">
+                            ...
+                          </span>
+                        );
+                      }
+                      const pageNum = page as number;
+                      const isActive = pageNum === validCurrentPage;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-orange-500 text-white font-bold shadow-2xs'
+                              : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-600 dark:text-slate-300 hover:border-orange-400'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Próxima Página */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={validCurrentPage === totalPages}
+                  title="Próxima Página"
+                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-600 dark:text-slate-300 hover:border-orange-400 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Última Página */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={validCurrentPage === totalPages}
+                  title="Última Página"
+                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202532] text-slate-600 dark:text-slate-300 hover:border-orange-400 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Floating Batch Actions Bar (Barra Flutuante de Ações em Lote) */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 80, opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 dark:bg-[#151a23]/95 backdrop-blur-md text-white px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-2.5 sm:gap-4 max-w-[95vw] flex-wrap justify-between"
+          >
+            {/* Contador de Seleção */}
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full bg-orange-500 font-mono text-xs font-bold text-white shadow-xs">
+                {selectedIds.size}
+              </span>
+              <span className="text-xs font-semibold text-slate-200 hidden sm:inline">
+                {selectedIds.size === 1 ? 'solicitação selecionada' : 'solicitações selecionadas'}
+              </span>
+            </div>
+
+            {/* Separador vertical */}
+            <div className="w-px h-5 bg-slate-700 hidden sm:block" />
+
+            {/* Botões de Ações em Lote */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              {/* Marcar como Concluído */}
+              <button
+                type="button"
+                onClick={handleBatchComplete}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title="Concluir todas as solicitações selecionadas"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Concluir</span>
+              </button>
+
+              {/* Marcar como Em Andamento (Reabrir) */}
+              <button
+                type="button"
+                onClick={handleBatchReopen}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title="Reabrir todas as solicitações selecionadas (Em andamento)"
+              >
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Reabrir</span>
+              </button>
+
+              {/* Exportar Selecionadas */}
+              {onBatchExport && (
+                <button
+                  type="button"
+                  onClick={handleBatchExportSelected}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  title="Exportar apenas as selecionadas para CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="hidden sm:inline">Exportar CSV</span>
+                </button>
+              )}
+
+              {/* Excluir Selecionadas (se permissão permitir) */}
+              {permissions?.canDeleteSC && onBatchDelete && (
+                <button
+                  type="button"
+                  onClick={handleBatchDeleteSelected}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-600 active:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  title="Excluir todas as solicitações selecionadas"
+                >
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline">Excluir</span>
+                </button>
+              )}
+
+              {/* Desmarcar / Fechar */}
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Desmarcar todas"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating Hover Card / Tooltip */}
       {hoveredSC && (

@@ -22,27 +22,11 @@ export const MCMLogo: React.FC<MCMLogoProps> = ({
   if (variant === 'symbol') {
     return (
       <div className={`inline-flex items-center select-none ${sizeClasses[size]} ${className}`}>
-        <svg
-          viewBox="0 0 350 240"
-          className="h-full w-auto drop-shadow-xs"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M 50,75 L 115,28 L 180,75 L 245,28 L 310,75 L 310,165 L 245,212 L 180,165 L 115,212 L 50,165 Z"
-            stroke="#FF5500"
-            strokeWidth="28"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M 50,165 L 180,82 L 255,135 L 255,65 L 180,120 L 105,65 L 105,135 L 180,82"
-            stroke="#FF5500"
-            strokeWidth="26"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <img
+          src="/logo-mcm-symbol.png"
+          alt="MCM"
+          className="h-full w-auto object-contain drop-shadow-2xs"
+        />
       </div>
     );
   }

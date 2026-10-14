@@ -6,19 +6,20 @@ import {
   seedInitialUsersToFirestore,
   subscribeToFirestoreUsers,
 } from './firebase';
+import { syncService } from './syncService';
 
 export const DEFAULT_USER_PERMISSIONS: UserPermissions = {
   canAccessSC: true,
-  canAccessInventario: true,
-  canAccessTermos: true,
-  canAccessAnalytics: true,
+  canAccessInventario: false, // Por padrão colaboradores não iniciam com inventário a menos que explicitamente concedido
+  canAccessTermos: false,     // Por padrão colaboradores não iniciam com termos a menos que explicitamente concedido
+  canAccessAnalytics: false,
   canAccessAdmin: false,
   canManageUsers: false,
   canCreateSC: true,
   canEditSC: true,
   canDeleteSC: false,
   canManageEquipments: false,
-  canManageTermos: true,
+  canManageTermos: false,
   canExportReports: true,
   canImportData: false,
 };
@@ -105,34 +106,35 @@ export function getUserPermissions(user?: UserProfile | null): UserPermissions {
   if (!user) return DEFAULT_USER_PERMISSIONS;
 
   const isBuiltinAdmin = user.id === 'usr-admin' || user.role === 'admin';
-  const base = isBuiltinAdmin ? ADMIN_USER_PERMISSIONS : DEFAULT_USER_PERMISSIONS;
+  const isKiosk = user.id === 'usr-quiosque' || user.isKiosk === true || user.role === 'kiosk';
+  const base = isBuiltinAdmin ? ADMIN_USER_PERMISSIONS : (isKiosk ? INITIAL_KIOSK_USER.permissions! : DEFAULT_USER_PERMISSIONS);
   const p = user.permissions || {};
 
   return {
-    canAccessSC: p.canAccessSC ?? user.canAccessSC ?? base.canAccessSC,
-    canAccessInventario: p.canAccessInventario ?? user.canAccessInventario ?? base.canAccessInventario,
-    canAccessTermos: p.canAccessTermos ?? user.canAccessTermos ?? base.canAccessTermos,
-    canAccessAnalytics: p.canAccessAnalytics ?? user.canAccessAnalytics ?? base.canAccessAnalytics,
-    canAccessAdmin: p.canAccessAdmin ?? user.canAccessAdmin ?? (isBuiltinAdmin ? true : base.canAccessAdmin),
-    canManageUsers: p.canManageUsers ?? user.canManageUsers ?? (isBuiltinAdmin ? true : base.canManageUsers),
-    canCreateSC: p.canCreateSC ?? base.canCreateSC,
-    canEditSC: p.canEditSC ?? base.canEditSC,
-    canDeleteSC: p.canDeleteSC ?? base.canDeleteSC,
-    canManageEquipments: p.canManageEquipments ?? base.canManageEquipments,
-    canManageTermos: p.canManageTermos ?? base.canManageTermos,
-    canExportReports: p.canExportReports ?? base.canExportReports,
-    canImportData: p.canImportData ?? base.canImportData,
+    canAccessSC: p.canAccessSC !== undefined ? Boolean(p.canAccessSC) : (user.canAccessSC !== undefined ? Boolean(user.canAccessSC) : base.canAccessSC),
+    canAccessInventario: p.canAccessInventario !== undefined ? Boolean(p.canAccessInventario) : (user.canAccessInventario !== undefined ? Boolean(user.canAccessInventario) : (isBuiltinAdmin ? true : false)),
+    canAccessTermos: p.canAccessTermos !== undefined ? Boolean(p.canAccessTermos) : (user.canAccessTermos !== undefined ? Boolean(user.canAccessTermos) : (isBuiltinAdmin ? true : false)),
+    canAccessAnalytics: p.canAccessAnalytics !== undefined ? Boolean(p.canAccessAnalytics) : (user.canAccessAnalytics !== undefined ? Boolean(user.canAccessAnalytics) : (isBuiltinAdmin ? true : false)),
+    canAccessAdmin: p.canAccessAdmin !== undefined ? Boolean(p.canAccessAdmin) : (user.canAccessAdmin !== undefined ? Boolean(user.canAccessAdmin) : (isBuiltinAdmin ? true : false)),
+    canManageUsers: p.canManageUsers !== undefined ? Boolean(p.canManageUsers) : (user.canManageUsers !== undefined ? Boolean(user.canManageUsers) : (isBuiltinAdmin ? true : false)),
+    canCreateSC: p.canCreateSC !== undefined ? Boolean(p.canCreateSC) : base.canCreateSC,
+    canEditSC: p.canEditSC !== undefined ? Boolean(p.canEditSC) : base.canEditSC,
+    canDeleteSC: p.canDeleteSC !== undefined ? Boolean(p.canDeleteSC) : base.canDeleteSC,
+    canManageEquipments: p.canManageEquipments !== undefined ? Boolean(p.canManageEquipments) : base.canManageEquipments,
+    canManageTermos: p.canManageTermos !== undefined ? Boolean(p.canManageTermos) : (user.canManageTermos !== undefined ? Boolean(user.canManageTermos) : base.canManageTermos),
+    canExportReports: p.canExportReports !== undefined ? Boolean(p.canExportReports) : base.canExportReports,
+    canImportData: p.canImportData !== undefined ? Boolean(p.canImportData) : base.canImportData,
   };
 }
 
 /**
- * Retorna o título descritivo do Cargo / Função do usuário
+ * Retorna o título descritivo do perfil do usuário (Setor ou Administrador)
  */
 export function getUserCargo(user?: UserProfile | null): string {
   if (!user) return 'Colaborador';
-  if (user.cargo && user.cargo.trim().length > 0) return user.cargo.trim();
-  if (user.role === 'admin' || user.id === 'usr-admin') return 'Administrador Geral';
-  if (user.role) return getRoleLabel(user.role);
+  if (user.role === 'admin' || user.id === 'usr-admin') return 'Administrador';
+  if (user.role === 'kiosk') return 'Painel Quiosque';
+  if (user.departamento && user.departamento.trim().length > 0) return user.departamento.trim();
   return 'Colaborador';
 }
 
@@ -153,64 +155,35 @@ export function getRoleLabel(role?: string): string {
   if (!role) return 'Colaborador';
   switch (role.toLowerCase()) {
     case 'admin':
-      return 'Administrador Geral';
+      return 'Administrador';
     case 'kiosk':
     case 'quiosque':
-      return 'Painel Quiosque / TV';
-    case 'usuario':
-      return 'Colaborador';
-    case 'comprador':
-      return 'Comprador';
-    case 'almoxarifado':
-      return 'Almoxarifado';
-    case 'gestor':
-      return 'Gestor / Diretoria';
+      return 'Painel Quiosque';
     default:
-      return role;
+      return 'Colaborador';
   }
 }
 
 export function getRoleBadgeClass(roleOrCargo?: string): { bg: string; text: string; border: string } {
   const norm = (roleOrCargo || '').toLowerCase();
-  if (norm.includes('kiosk') || norm.includes('quiosque') || norm.includes('painel tv')) {
+  if (norm.includes('kiosk') || norm.includes('quiosque') || norm.includes('painel')) {
     return {
       bg: 'bg-orange-500/10 dark:bg-orange-500/20',
       text: 'text-orange-600 dark:text-orange-400',
       border: 'border-orange-500/30',
     };
   }
-  if (norm.includes('admin') || norm.includes('diretor') || norm.includes('gerente')) {
+  if (norm.includes('admin')) {
     return {
-      bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-      text: 'text-indigo-600 dark:text-indigo-400',
-      border: 'border-indigo-500/30',
-    };
-  }
-  if (norm.includes('compra') || norm.includes('suprimento')) {
-    return {
-      bg: 'bg-orange-500/10 dark:bg-orange-500/20',
-      text: 'text-orange-600 dark:text-orange-400',
-      border: 'border-orange-500/30',
-    };
-  }
-  if (norm.includes('almoxarif') || norm.includes('estoque') || norm.includes('logístic')) {
-    return {
-      bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-      text: 'text-emerald-600 dark:text-emerald-400',
-      border: 'border-emerald-500/30',
-    };
-  }
-  if (norm.includes('ti') || norm.includes('sistemas') || norm.includes('técnic') || norm.includes('analista')) {
-    return {
-      bg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
-      text: 'text-cyan-700 dark:text-cyan-300',
-      border: 'border-cyan-500/30',
+      bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+      text: 'text-amber-700 dark:text-amber-300',
+      border: 'border-amber-500/30',
     };
   }
   return {
-    bg: 'bg-slate-500/10 dark:bg-slate-500/20',
+    bg: 'bg-slate-100 dark:bg-slate-800',
     text: 'text-slate-700 dark:text-slate-300',
-    border: 'border-slate-500/30',
+    border: 'border-slate-200 dark:border-slate-700',
   };
 }
 
@@ -361,24 +334,237 @@ export function getUserActivityInfo(
   };
 }
 
-const STORAGE_KEY_AUTH_USER = 'mcm_authenticated_user_session';
-const STORAGE_KEY_AUTH_SESSIONS = 'mcm_unlocked_sessions';
-const STORAGE_KEY_CACHED_USERS = 'mcm_cached_team_users';
+export const STORAGE_KEY_AUTH_USER = 'mcm_authenticated_user_session';
+export const STORAGE_KEY_AUTH_SESSIONS = 'mcm_unlocked_sessions';
+export const STORAGE_KEY_CACHED_USERS = 'mcm_cached_team_users';
+
+// Chaves de cache de sessão de ultra-baixa latência (sessionStorage) para carregamento instantâneo
+export const SESSION_STORAGE_KEY_USER = 'mcm_session_user_profile';
+export const SESSION_STORAGE_KEY_PERMISSIONS = 'mcm_session_user_permissions';
+export const SESSION_STORAGE_KEY_USER_ID = 'mcm_session_user_id';
+export const SESSION_STORAGE_KEY_TIMESTAMP = 'mcm_session_last_sync_time';
 
 export const authService = {
+  /**
+   * Grava imediatamente a sessão ativa e os privilégios calculados no sessionStorage e localStorage
+   */
+  saveSessionCache(user: UserProfile): void {
+    try {
+      if (!user) return;
+      if (!user.nome || typeof user.nome !== 'string' || user.nome.trim() === '') {
+        user.nome = (user as any).name || (user as any).displayName || (user.email ? user.email.split('@')[0] : '') || 'Colaborador';
+      }
+
+      // Calcula os privilégios completos e individuais de forma determinística
+      const perms = getUserPermissions(user);
+      const userWithPerms: UserProfile = {
+        ...user,
+        permissions: perms,
+        canAccessSC: perms.canAccessSC,
+        canAccessInventario: perms.canAccessInventario,
+        canAccessTermos: perms.canAccessTermos,
+        canAccessAnalytics: perms.canAccessAnalytics,
+        canAccessAdmin: perms.canAccessAdmin,
+      };
+
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY_USER, JSON.stringify(userWithPerms));
+        sessionStorage.setItem(SESSION_STORAGE_KEY_PERMISSIONS, JSON.stringify(perms));
+        sessionStorage.setItem(SESSION_STORAGE_KEY_USER_ID, user.id);
+        sessionStorage.setItem(SESSION_STORAGE_KEY_TIMESTAMP, Date.now().toString());
+      }
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(userWithPerms));
+        localStorage.setItem(SESSION_STORAGE_KEY_PERMISSIONS, JSON.stringify(perms));
+      }
+    } catch (e) {
+      console.warn('Erro ao salvar cache de sessão no sessionStorage:', e);
+    }
+  },
+
+  /**
+   * Limpa integralmente o cache de sessão e privilégios do sessionStorage e localStorage
+   */
+  clearSessionCache(): void {
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY_USER);
+        sessionStorage.removeItem(SESSION_STORAGE_KEY_PERMISSIONS);
+        sessionStorage.removeItem(SESSION_STORAGE_KEY_USER_ID);
+        sessionStorage.removeItem(SESSION_STORAGE_KEY_TIMESTAMP);
+        sessionStorage.removeItem(STORAGE_KEY_AUTH_SESSIONS);
+      }
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(STORAGE_KEY_AUTH_USER);
+        localStorage.removeItem(SESSION_STORAGE_KEY_PERMISSIONS);
+      }
+    } catch (e) {
+      console.warn('Erro ao limpar cache de sessão:', e);
+    }
+  },
+
+  /**
+   * Carrega instantaneamente os privilégios do usuário diretamente do sessionStorage
+   * antes de qualquer sincronização assíncrona do Firebase, prevenindo flickering de botões.
+   */
+  getInstantSessionPermissions(user?: UserProfile | null): UserPermissions {
+    try {
+      // 1. Prioridade máxima: privilégios cacheados no sessionStorage da aba
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const sessionPermsRaw = sessionStorage.getItem(SESSION_STORAGE_KEY_PERMISSIONS);
+        if (sessionPermsRaw) {
+          const parsed = JSON.parse(sessionPermsRaw);
+          if (parsed && typeof parsed === 'object' && typeof parsed.canAccessSC === 'boolean') {
+            return parsed as UserPermissions;
+          }
+        }
+      }
+
+      // 2. Segunda prioridade: localStorage
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const localPermsRaw = localStorage.getItem(SESSION_STORAGE_KEY_PERMISSIONS);
+        if (localPermsRaw) {
+          const parsed = JSON.parse(localPermsRaw);
+          if (parsed && typeof parsed === 'object' && typeof parsed.canAccessSC === 'boolean') {
+            if (window.sessionStorage) {
+              sessionStorage.setItem(SESSION_STORAGE_KEY_PERMISSIONS, localPermsRaw);
+            }
+            return parsed as UserPermissions;
+          }
+        }
+      }
+
+      // 3. Terceira prioridade: calcula com base no usuário passado ou na sessão ativa
+      const targetUser = user || this.getInstantSessionUser();
+      if (targetUser) {
+        const computed = getUserPermissions(targetUser);
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          sessionStorage.setItem(SESSION_STORAGE_KEY_PERMISSIONS, JSON.stringify(computed));
+        }
+        return computed;
+      }
+    } catch (e) {
+      console.warn('Erro ao ler permissões instantâneas do sessionStorage:', e);
+    }
+
+    return DEFAULT_USER_PERMISSIONS;
+  },
+
+  /**
+   * Retorna o usuário logado com máxima rapidez via sessionStorage, com fallback transparente para localStorage
+   */
+  getInstantSessionUser(): UserProfile | null {
+    try {
+      if (typeof window === 'undefined') return null;
+
+      // 1. Tenta recuperar do sessionStorage (específico da aba ativa, síncrono e instantâneo)
+      if (window.sessionStorage) {
+        const sessionRaw = sessionStorage.getItem(SESSION_STORAGE_KEY_USER);
+        if (sessionRaw) {
+          const u: UserProfile = JSON.parse(sessionRaw);
+          if (u && typeof u === 'object' && u.id) {
+            const permsRaw = sessionStorage.getItem(SESSION_STORAGE_KEY_PERMISSIONS);
+            if (permsRaw) {
+              try {
+                u.permissions = JSON.parse(permsRaw);
+              } catch {}
+            }
+            if (!u.permissions) {
+              u.permissions = getUserPermissions(u);
+            }
+            return u;
+          }
+        }
+      }
+
+      // 2. Fallback para localStorage (persistência entre abas ou nova aba na mesma máquina)
+      if (window.localStorage) {
+        const localRaw = localStorage.getItem(STORAGE_KEY_AUTH_USER);
+        if (localRaw) {
+          const u: UserProfile = JSON.parse(localRaw);
+          if (u && typeof u === 'object' && u.id) {
+            if (!u.nome || typeof u.nome !== 'string' || u.nome.trim() === '') {
+              u.nome = (u as any).name || (u as any).displayName || (u.email ? u.email.split('@')[0] : '') || 'Colaborador';
+            }
+            // Higienização de integridade
+            if (u.id !== 'usr-quiosque' && (u.isKiosk || u.role === 'kiosk')) {
+              u.isKiosk = false;
+              u.role = (u.id === 'usr-admin' || (u.cargo && u.cargo.toLowerCase().includes('admin'))) ? 'admin' : 'colaborador';
+            }
+
+            // Calcula privilégios e sincroniza o sessionStorage imediatamente
+            const perms = getUserPermissions(u);
+            u.permissions = perms;
+            this.saveSessionCache(u);
+            return u;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao obter usuário de sessão instantânea:', e);
+    }
+    return null;
+  },
+
   /**
    * Retorna o usuário logado na sessão atual
    */
   getAuthenticatedUser(): UserProfile | null {
+    const u = this.getInstantSessionUser();
+    if (!u) return null;
+
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_AUTH_USER);
-      if (saved) {
-        return JSON.parse(saved);
+      // Reconciliação imediata com o cache de usuários da equipe se disponível
+      const cachedStr = localStorage.getItem(STORAGE_KEY_CACHED_USERS);
+      if (cachedStr) {
+        try {
+          const cachedList: UserProfile[] = JSON.parse(cachedStr);
+          const freshInCache = cachedList.find((item) => item.id === u.id);
+          if (freshInCache) {
+            const merged: UserProfile = {
+              ...u,
+              ...freshInCache,
+              permissions: freshInCache.permissions || u.permissions || getUserPermissions(freshInCache),
+            };
+            this.saveSessionCache(merged);
+            return merged;
+          }
+        } catch {}
       }
     } catch (e) {
-      console.warn('Erro ao ler usuário autenticado:', e);
+      console.warn('Erro na reconciliação do usuário autenticado:', e);
     }
-    return null;
+
+    return u;
+  },
+
+  /**
+   * Sincroniza ativamente uma sessão de usuário em memória e cache
+   */
+  syncUserSession(user: UserProfile): void {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY_CACHED_USERS);
+      let list: UserProfile[] = [];
+      if (cached) {
+        list = JSON.parse(cached);
+      }
+      const idx = list.findIndex((u) => u.id === user.id);
+      if (idx >= 0) {
+        list[idx] = user;
+      } else {
+        list.push(user);
+      }
+      localStorage.setItem(STORAGE_KEY_CACHED_USERS, JSON.stringify(list));
+
+      const current = this.getInstantSessionUser();
+      if (current && current.id === user.id) {
+        this.setAuthenticatedUser(user);
+      }
+      syncService.broadcast('USER_UPDATED', user);
+    } catch (err) {
+      console.warn('Erro ao sincronizar sessão de usuário:', err);
+    }
   },
 
   /**
@@ -386,8 +572,26 @@ export const authService = {
    */
   setAuthenticatedUser(user: UserProfile): void {
     try {
-      localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(user));
+      if (user && (!user.nome || typeof user.nome !== 'string' || user.nome.trim() === '')) {
+        user.nome = (user as any).name || (user as any).displayName || (user.email ? user.email.split('@')[0] : '') || 'Colaborador';
+      }
+      this.saveSessionCache(user);
       this.markSessionUnlocked(user.id);
+
+      // Garante que o cache de equipe também contenha o perfil atualizado
+      const cached = localStorage.getItem(STORAGE_KEY_CACHED_USERS);
+      if (cached) {
+        try {
+          const list: UserProfile[] = JSON.parse(cached);
+          const idx = list.findIndex((u) => u.id === user.id);
+          if (idx >= 0) {
+            list[idx] = user;
+          } else {
+            list.push(user);
+          }
+          localStorage.setItem(STORAGE_KEY_CACHED_USERS, JSON.stringify(list));
+        } catch {}
+      }
     } catch (e) {
       console.error('Erro ao salvar sessão autenticada:', e);
     }
@@ -398,20 +602,26 @@ export const authService = {
    */
   logout(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY_AUTH_USER);
-      sessionStorage.removeItem(STORAGE_KEY_AUTH_SESSIONS);
+      this.clearSessionCache();
     } catch (e) {
       console.error('Erro ao efetuar logout:', e);
     }
   },
 
   /**
-   * Retorna o usuário ativo ou o Admin padrão
+   * Retorna o usuário ativo ou um perfil seguro não-privilegiado
    */
   getCurrentUser(): UserProfile {
     const auth = this.getAuthenticatedUser();
-    if (auth) return auth;
-    return INITIAL_ADMIN_USER;
+    if (auth && auth.nome) return auth;
+    return {
+      id: 'usr-guest',
+      nome: 'Colaborador',
+      email: '',
+      role: 'colaborador',
+      departamento: 'Geral',
+      permissions: DEFAULT_USER_PERMISSIONS,
+    };
   },
 
   /**
@@ -441,13 +651,33 @@ export const authService = {
       }
 
       // Garante que o Administrador Luchesy existe com a senha solicitada (104145)
-      const adminInDb = users.find((u) => u.id === 'usr-admin' || u.role === 'admin');
-      if (!adminInDb || adminInDb.password !== '104145' || adminInDb.nome !== 'Luchesy (Admin)') {
+      const adminInDb = users.find((u) => u.id === 'usr-admin');
+      if (!adminInDb || adminInDb.password !== '104145' || adminInDb.nome !== 'Luchesy (Admin)' || adminInDb.role !== 'admin' || adminInDb.isKiosk) {
         await saveUserToFirestore(INITIAL_ADMIN_USER);
+        const idx = users.findIndex((u) => u.id === 'usr-admin');
+        if (idx >= 0) users[idx] = INITIAL_ADMIN_USER;
+        else users.push(INITIAL_ADMIN_USER);
       }
 
-      // Recarrega do banco após higienização
-      users = await fetchAllUsersFromFirestore();
+      // Higienização no Firestore: nenhum usuário além de 'usr-quiosque' pode ter isKiosk=true ou role='kiosk'
+      for (let i = 0; i < users.length; i++) {
+        const u = users[i];
+        if (u.id !== 'usr-quiosque' && (u.isKiosk === true || u.role === 'kiosk')) {
+          const restoredRole = (u.id === 'usr-admin' || (u.cargo && u.cargo.toLowerCase().includes('admin'))) ? 'admin' : 'colaborador';
+          const cleaned: UserProfile = {
+            ...u,
+            isKiosk: false,
+            role: restoredRole,
+          };
+          users[i] = cleaned;
+          try {
+            await saveUserToFirestore(cleaned);
+          } catch (errClean) {
+            console.warn('Erro ao restaurar usuário corrompido com perfil de quiosque:', u.id, errClean);
+          }
+        }
+      }
+
       if (!users || users.length === 0) {
         users = await seedInitialUsersToFirestore(DEFAULT_USERS);
       }
@@ -456,6 +686,16 @@ export const authService = {
       users = users.filter((u) => !mockIdsToDelete.includes(u.id));
 
       localStorage.setItem(STORAGE_KEY_CACHED_USERS, JSON.stringify(users));
+
+      // Sincroniza a sessão ativa local caso o usuário atual esteja na lista atualizada do Firestore
+      const currentAuth = this.getAuthenticatedUser();
+      if (currentAuth) {
+        const fresh = users.find((u) => u.id === currentAuth.id);
+        if (fresh) {
+          this.setAuthenticatedUser(fresh);
+        }
+      }
+
       return users;
     } catch (err) {
       console.warn('Erro ao buscar usuários do Firestore, utilizando fallback:', err);
@@ -495,6 +735,16 @@ export const authService = {
       if (cloudUsers && cloudUsers.length > 0) {
         const cleanList = cloudUsers.filter((u) => !mockIds.includes(u.id));
         localStorage.setItem(STORAGE_KEY_CACHED_USERS, JSON.stringify(cleanList));
+
+        // Sincroniza em tempo real a sessão ativa local caso o admin tenha alterado permissões no Firestore
+        const currentAuth = this.getAuthenticatedUser();
+        if (currentAuth) {
+          const fresh = cleanList.find((u) => u.id === currentAuth.id);
+          if (fresh) {
+            this.setAuthenticatedUser(fresh);
+          }
+        }
+
         onData(cleanList.length > 0 ? cleanList : DEFAULT_USERS);
       } else {
         seedInitialUsersToFirestore(DEFAULT_USERS).then((seeded) => {
@@ -676,6 +926,16 @@ export const authService = {
     };
 
     await saveUserToFirestore(newUser);
+
+    // Atualiza imediatamente o cache de usuários local e propaga
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY_CACHED_USERS);
+      const list: UserProfile[] = cached ? JSON.parse(cached) : [];
+      list.push(newUser);
+      localStorage.setItem(STORAGE_KEY_CACHED_USERS, JSON.stringify(list));
+    } catch {}
+
+    syncService.broadcast('USER_UPDATED', newUser);
     return newUser;
   },
 
@@ -721,11 +981,30 @@ export const authService = {
 
     await saveUserToFirestore(updated);
 
+    // Atualiza imediatamente o cache de usuários local
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY_CACHED_USERS);
+      let list: UserProfile[] = [];
+      if (cached) {
+        list = JSON.parse(cached);
+      }
+      const idx = list.findIndex((u) => u.id === userId);
+      if (idx >= 0) {
+        list[idx] = updated;
+      } else {
+        list.push(updated);
+      }
+      localStorage.setItem(STORAGE_KEY_CACHED_USERS, JSON.stringify(list));
+    } catch {}
+
     // Se atualizou o usuário autenticado na sessão ativa, reflete no estado
     const current = this.getAuthenticatedUser();
     if (current && current.id === userId) {
       this.setAuthenticatedUser(updated);
     }
+
+    // Propaga via broadcast instantâneo para todas as abas / janelas
+    syncService.broadcast('USER_UPDATED', updated);
 
     return updated;
   },
@@ -743,11 +1022,15 @@ export const authService = {
 
   getPermissions(userOrRole?: UserProfile | string): RolePermissions {
     if (typeof userOrRole === 'object' && userOrRole !== null) {
+      const sessionUser = this.getInstantSessionUser();
+      if (sessionUser && sessionUser.id === userOrRole.id) {
+        return this.getInstantSessionPermissions(userOrRole);
+      }
       return getUserPermissions(userOrRole);
     }
     if (typeof userOrRole === 'string') {
       return getRolePermissions(userOrRole);
     }
-    return getUserPermissions(this.getCurrentUser());
+    return this.getInstantSessionPermissions();
   },
 };

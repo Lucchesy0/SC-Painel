@@ -21,6 +21,8 @@ interface SCRowItemProps {
   gridConfig: GridConfig;
   cellPadding: string;
   permissions?: RolePermissions;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string, e: React.MouseEvent) => void;
   onSelectSC: (sc: SC) => void;
   onEditSC: (sc: SC) => void;
   onDeleteSC: (id: string) => void;
@@ -31,6 +33,7 @@ interface SCRowItemProps {
 }
 
 const areSCRowPropsEqual = (prev: SCRowItemProps, next: SCRowItemProps): boolean => {
+  if (prev.isSelected !== next.isSelected) return false;
   if (prev.sc !== next.sc) {
     if (
       prev.sc.id !== next.sc.id ||
@@ -83,6 +86,8 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
   gridConfig,
   cellPadding,
   permissions,
+  isSelected = false,
+  onToggleSelect,
   onSelectSC,
   onEditSC,
   onDeleteSC,
@@ -129,7 +134,9 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
         onMouseMove={(e) => onMouseMove?.(e, sc)}
         onMouseLeave={onMouseLeave}
         className={`animate-fade-in-row transition-all group cursor-default relative ${
-          isCompletingAnim
+          isSelected
+            ? 'bg-orange-50/80 dark:bg-orange-950/35 ring-1 ring-inset ring-orange-400/40'
+            : isCompletingAnim
             ? 'animate-completion-pulse bg-emerald-100/60 dark:bg-emerald-950/40'
             : isAtrasada
             ? 'bg-red-50/30 dark:bg-red-950/15 hover:bg-red-50/70 dark:hover:bg-red-950/30'
@@ -140,6 +147,17 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
             : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
         }`}
       >
+        {/* Selection Checkbox */}
+        <td className="w-10 px-3 py-2 text-center select-none" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => onToggleSelect?.(sc.id, e as unknown as React.MouseEvent)}
+            aria-label={`Selecionar SC ${sc.numero}`}
+            className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-orange-600 focus:ring-orange-500/30 cursor-pointer accent-orange-600 transition-transform active:scale-90"
+          />
+        </td>
+
         {/* SC Number */}
         {gridConfig.visibleColumns.numero && (
           <td className={`${cellPadding} font-medium text-orange-600 dark:text-orange-400`}>
@@ -190,31 +208,29 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
               disabled={!canEdit}
               title={
                 !canEdit
-                  ? 'Somente Comprador ou Administrador podem alterar status'
+                  ? 'Sem permissão para alterar o status'
                   : sc.status === 'Concluído'
                   ? 'Concluída! Clique para reabrir'
                   : 'Clique para concluir a solicitação'
               }
-              className={`group/status relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
-                canEdit ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-85'
+              className={`group/status relative inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold border transition-colors ${
+                canEdit ? 'cursor-pointer' : 'cursor-default'
               } select-none focus:outline-hidden ${
-                isCompletingAnim
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-105'
-                  : sc.status === 'Concluído'
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                sc.status === 'Concluído'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 hover:bg-emerald-100'
                   : isAtrasada
-                  ? 'bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30 hover:bg-red-500/25 dark:bg-red-950/60 shadow-2xs'
+                  ? 'bg-red-50 text-red-800 border-red-300 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800 hover:bg-red-100'
                   : isHoje
-                  ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 dark:bg-amber-950/60 shadow-2xs'
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100'
                   : isBreve
-                  ? 'bg-orange-500/15 text-orange-800 dark:text-orange-300 border border-orange-500/30 hover:bg-orange-500/25 dark:bg-orange-950/60 shadow-2xs'
-                  : 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/25 hover:bg-sky-500/20'
+                  ? 'bg-orange-50 text-orange-900 border-orange-300 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800 hover:bg-orange-100'
+                  : 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 hover:bg-slate-200'
               }`}
             >
               {isCompletingAnim ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-white animate-checkmark-pop" />
-                  <span>Concluindo!</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Concluído</span>
                 </>
               ) : sc.status === 'Concluído' ? (
                 <>
@@ -226,7 +242,7 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
                 </>
               ) : isAtrasada ? (
                 <>
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 animate-pulse group-hover/status:hidden" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 group-hover/status:hidden" />
                   {canEdit && (
                     <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 hidden group-hover/status:inline-block" />
                   )}
@@ -250,7 +266,7 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
                 </>
               ) : (
                 <>
-                  <Clock className="w-3.5 h-3.5 text-sky-500 group-hover/status:hidden" />
+                  <Clock className="w-3.5 h-3.5 text-slate-500 group-hover/status:hidden" />
                   {canEdit && (
                     <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 hidden group-hover/status:inline-block" />
                   )}
@@ -278,12 +294,10 @@ const SCRowItemComponent: React.FC<SCRowItemProps> = ({
             ) : isAtrasada ? (
               <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-bold">
                 <span>{dias} dias</span>
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
               </div>
             ) : isHoje || isBreve ? (
               <div className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-bold">
                 <span>{dias} dias</span>
-                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
               </div>
             ) : (
               <span className="text-slate-600 dark:text-slate-400">{dias} dias</span>

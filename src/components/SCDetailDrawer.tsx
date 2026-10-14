@@ -217,7 +217,7 @@ export const SCDetailDrawer: React.FC<SCDetailDrawerProps> = ({
 
                   return (
                     <div
-                      key={item.id || idx}
+                      key={item.id ? `${item.id}-${idx}` : `drawer-item-${idx}`}
                       className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#181d28] shadow-xs flex items-center justify-between gap-3"
                     >
                       <div className="flex-1 min-w-0">
@@ -275,7 +275,7 @@ export const SCDetailDrawer: React.FC<SCDetailDrawerProps> = ({
               <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/60 flex flex-col gap-2 max-h-48 overflow-y-auto">
                 {auditHistory.map((entry, idx) => (
                   <div
-                    key={entry.id || idx}
+                    key={entry.id ? `${entry.id}-${idx}` : `audit-${idx}`}
                     className="p-2 rounded-lg bg-white dark:bg-[#1c2230] text-xs border border-slate-200/80 dark:border-slate-800"
                   >
                     <div className="flex items-center justify-between text-[11px]">

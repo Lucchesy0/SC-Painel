@@ -107,15 +107,15 @@ export const PasswordAuthModal: React.FC<PasswordAuthModalProps> = ({
             <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-[#131722] border border-slate-200 dark:border-slate-800 mb-5">
               <div
                 className={`w-11 h-11 rounded-xl ${
-                  user.avatarColor || 'bg-indigo-600'
+                  user?.avatarColor || 'bg-indigo-600'
                 } text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0`}
               >
-                {user.nome.charAt(0)}
+                {(user?.nome || 'U').charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm text-slate-900 dark:text-white truncate">
-                    {user.nome}
+                    {user?.nome || 'Usuário'}
                   </span>
                   <span
                     className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${badge.bg} ${badge.text} ${badge.border}`}

@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
   collection,
   doc,
   getDoc,
@@ -14,15 +15,23 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { SC, Equipment, CloudSyncStatus, UserProfile, ResponsibilityTerm } from '../types';
+import { SC, Equipment, CloudSyncStatus, UserProfile, UserPermissions, ResponsibilityTerm } from '../types';
 
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore (using custom databaseId if configured)
+// Initialize Firestore with force long polling enabled to prevent WebSocket connection drops in iframes/sandboxes
 export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+  ? initializeFirestore(
+      app,
+      {
+        experimentalForceLongPolling: true,
+      },
+      firebaseConfig.firestoreDatabaseId
+    )
+  : initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
 
 export const auth = getAuth(app);
 
@@ -124,21 +133,32 @@ export function subscribeToSyncStatus(listener: (status: CloudSyncStatus) => voi
 }
 
 /**
- * Validate connection to Firestore using getDocFromServer as mandated by Firebase skill
+ * Validate connection to Firestore using getDoc with timeout and graceful offline fallback
  */
 export async function testFirestoreConnection(): Promise<boolean> {
   try {
     setCloudSyncStatus('syncing');
-    await getDocFromServer(doc(db, 'system_settings', 'healthcheck'));
+    await Promise.race([
+      getDoc(doc(db, 'system_settings', 'healthcheck')),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('connection_timeout')), 6000)),
+    ]);
     setCloudSyncStatus('connected');
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore está offline ou sem conexão no momento.');
+  } catch (error: any) {
+    const isOfflineOrUnavailable =
+      error?.code === 'unavailable' ||
+      (error instanceof Error &&
+        (error.message.includes('unavailable') ||
+          error.message.includes('offline') ||
+          error.message.includes('could not be completed') ||
+          error.message.includes('connection_timeout')));
+
+    if (isOfflineOrUnavailable) {
+      console.warn('Firestore em modo de sincronização/cache local enquanto conecta ao backend.');
       setCloudSyncStatus('offline');
       return false;
     }
-    // Any permission or other response still proves endpoint connectivity
+    // Any permission or existing document response still proves endpoint connectivity
     setCloudSyncStatus('connected');
     return true;
   }
@@ -158,9 +178,14 @@ export function subscribeToFirestoreSCs(
       scsRef,
       (snapshot) => {
         const list: SC[] = [];
+        const seenIds = new Set<string>();
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as SC;
-          list.push({ ...data, id: docSnap.id });
+          const id = docSnap.id || data.id;
+          if (id && !seenIds.has(id)) {
+            seenIds.add(id);
+            list.push({ ...data, id });
+          }
         });
         setCloudSyncStatus('connected');
         onData(list);
@@ -247,8 +272,14 @@ export async function fetchAllSCsFromFirestore(): Promise<SC[]> {
     const scsRef = collection(db, SCS_COLLECTION);
     const snap = await getDocs(scsRef);
     const list: SC[] = [];
+    const seenIds = new Set<string>();
     snap.forEach((docSnap) => {
-      list.push({ ...(docSnap.data() as SC), id: docSnap.id });
+      const data = docSnap.data() as SC;
+      const id = docSnap.id || data.id;
+      if (id && !seenIds.has(id)) {
+        seenIds.add(id);
+        list.push({ ...data, id });
+      }
     });
     setCloudSyncStatus('connected');
     return list;
@@ -464,6 +495,65 @@ export async function saveSettingToFirestore<T>(key: string, value: T): Promise<
 }
 
 /**
+ * Normaliza e protege o perfil do usuário lido do Firestore para garantir integridade
+ */
+function normalizeFirestoreUserProfile(raw: any, docId: string): UserProfile {
+  const nomeRaw = raw?.nome || raw?.name || raw?.displayName || (raw?.email ? raw.email.split('@')[0] : '');
+  const nome = (typeof nomeRaw === 'string' && nomeRaw.trim().length > 0) ? nomeRaw.trim() : (docId === 'usr-admin' ? 'Luchesy (Admin)' : 'Colaborador');
+  const email = (raw?.email && typeof raw.email === 'string') ? raw.email.trim() : `${docId}@mcm.com.br`;
+  const departamento = (raw?.departamento && typeof raw.departamento === 'string') ? raw.departamento : 'Geral';
+  const role = (raw?.role && typeof raw.role === 'string') ? raw.role : (docId === 'usr-admin' ? 'admin' : 'colaborador');
+  const cargo = (raw?.cargo && typeof raw.cargo === 'string') ? raw.cargo : (role === 'admin' ? 'Administrador Geral' : 'Colaborador');
+
+  const rawPerms = raw?.permissions || {};
+  const isAdmin = (role === 'admin' || docId === 'usr-admin');
+  const isKiosk = (role === 'kiosk' || raw?.isKiosk === true || docId === 'usr-quiosque');
+
+  const canAccessSC = rawPerms.canAccessSC !== undefined ? Boolean(rawPerms.canAccessSC) : (raw?.canAccessSC !== undefined ? Boolean(raw.canAccessSC) : true);
+  const canAccessInventario = rawPerms.canAccessInventario !== undefined ? Boolean(rawPerms.canAccessInventario) : (raw?.canAccessInventario !== undefined ? Boolean(raw.canAccessInventario) : (isKiosk ? false : isAdmin));
+  const canAccessTermos = rawPerms.canAccessTermos !== undefined ? Boolean(rawPerms.canAccessTermos) : (raw?.canAccessTermos !== undefined ? Boolean(raw.canAccessTermos) : (isKiosk ? false : isAdmin));
+  const canManageTermos = rawPerms.canManageTermos !== undefined ? Boolean(rawPerms.canManageTermos) : (raw?.canManageTermos !== undefined ? Boolean(raw.canManageTermos) : isAdmin);
+  const canAccessAnalytics = rawPerms.canAccessAnalytics !== undefined ? Boolean(rawPerms.canAccessAnalytics) : (raw?.canAccessAnalytics !== undefined ? Boolean(raw.canAccessAnalytics) : isAdmin);
+  const canAccessAdmin = rawPerms.canAccessAdmin !== undefined ? Boolean(rawPerms.canAccessAdmin) : (raw?.canAccessAdmin !== undefined ? Boolean(raw.canAccessAdmin) : isAdmin);
+  const canManageUsers = rawPerms.canManageUsers !== undefined ? Boolean(rawPerms.canManageUsers) : (raw?.canManageUsers !== undefined ? Boolean(raw.canManageUsers) : isAdmin);
+
+  const permissions: UserPermissions = {
+    canAccessSC,
+    canAccessInventario,
+    canAccessTermos,
+    canManageTermos,
+    canAccessAnalytics,
+    canAccessAdmin,
+    canManageUsers,
+    canCreateSC: rawPerms.canCreateSC !== undefined ? Boolean(rawPerms.canCreateSC) : !isKiosk,
+    canEditSC: rawPerms.canEditSC !== undefined ? Boolean(rawPerms.canEditSC) : !isKiosk,
+    canDeleteSC: rawPerms.canDeleteSC !== undefined ? Boolean(rawPerms.canDeleteSC) : isAdmin,
+    canManageEquipments: rawPerms.canManageEquipments !== undefined ? Boolean(rawPerms.canManageEquipments) : isAdmin,
+    canExportReports: rawPerms.canExportReports !== undefined ? Boolean(rawPerms.canExportReports) : !isKiosk,
+    canImportData: rawPerms.canImportData !== undefined ? Boolean(rawPerms.canImportData) : isAdmin,
+  };
+
+  return {
+    ...raw,
+    id: docId,
+    nome,
+    email,
+    cargo,
+    role,
+    departamento,
+    avatarColor: raw?.avatarColor || 'bg-slate-700',
+    permissions,
+    canAccessSC,
+    canAccessInventario,
+    canAccessTermos,
+    canManageTermos,
+    canAccessAnalytics,
+    canAccessAdmin,
+    canManageUsers,
+  };
+}
+
+/**
  * Real-time listener for Team Users in Firestore
  */
 export function subscribeToFirestoreUsers(
@@ -477,8 +567,7 @@ export function subscribeToFirestoreUsers(
       (snapshot) => {
         const list: UserProfile[] = [];
         snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as UserProfile;
-          list.push({ ...data, id: docSnap.id });
+          list.push(normalizeFirestoreUserProfile(docSnap.data(), docSnap.id));
         });
         onData(list);
       },
@@ -502,7 +591,7 @@ export async function fetchAllUsersFromFirestore(): Promise<UserProfile[]> {
     const snap = await getDocs(usersRef);
     const list: UserProfile[] = [];
     snap.forEach((docSnap) => {
-      list.push({ ...(docSnap.data() as UserProfile), id: docSnap.id });
+      list.push(normalizeFirestoreUserProfile(docSnap.data(), docSnap.id));
     });
     return list;
   } catch (err) {
@@ -521,6 +610,26 @@ export async function saveUserToFirestore(user: UserProfile): Promise<void> {
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${USERS_COLLECTION}/${user.id}`);
     throw err;
+  }
+}
+
+/**
+ * Atualiza o status de presença (online/offline) e lastSeen sem sobrescrever os demais campos do usuário
+ */
+export async function updateUserPresenceInFirestore(userId: string, isOnline: boolean): Promise<void> {
+  if (!userId) return;
+  try {
+    const docRef = doc(db, USERS_COLLECTION, userId);
+    await setDoc(
+      docRef,
+      {
+        isOnline,
+        lastSeen: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch {
+    // Silencioso em caso de oscilação transitória de rede
   }
 }
 

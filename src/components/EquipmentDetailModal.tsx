@@ -10,6 +10,9 @@ import {
   Boxes,
   Tag,
   CopyPlus,
+  Smartphone,
+  Tablet,
+  User,
 } from 'lucide-react';
 import { Equipment, EquipmentStatus } from '../types';
 import { ConfirmModal } from './ConfirmModal';
@@ -149,9 +152,22 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
                   Categoria
                 </span>
                 <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
-                  {equipment.categoria || '-'}
+                  {equipment.categoria || 'Equipamentos'}
                 </span>
               </div>
+
+              {/* Subcategoria (se houver) */}
+              {(equipment.subcategoria || (equipment.categoria || '').toLowerCase().includes('tablet')) && (
+                <div className="p-3.5 rounded-xl bg-orange-50/60 dark:bg-orange-950/30 border border-orange-200/80 dark:border-orange-800/60">
+                  <span className="text-[10px] uppercase font-bold text-orange-600 dark:text-orange-400 block mb-1 flex items-center gap-1">
+                    <Tablet className="w-3 h-3" />
+                    Subcategoria
+                  </span>
+                  <span className="font-bold text-xs text-orange-700 dark:text-orange-300">
+                    {equipment.subcategoria || 'Tablet'}
+                  </span>
+                </div>
+              )}
 
               {/* Localização */}
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#202532] border border-slate-200 dark:border-slate-700/60">
@@ -163,6 +179,32 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
                   {equipment.localizacao || '-'}
                 </span>
               </div>
+
+              {/* Usuário / Responsável (se cadastrado) */}
+              {(equipment.usuarioResponsavel || equipment.responsavel) && (
+                <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 sm:col-span-2">
+                  <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 block mb-1 flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    Usuário / Responsável
+                  </span>
+                  <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    {equipment.usuarioResponsavel || equipment.responsavel}
+                  </span>
+                </div>
+              )}
+
+              {/* IMEI (Telefonia / Tablets / Modems) */}
+              {equipment.imei && (
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#202532] border border-slate-200 dark:border-slate-700/60 sm:col-span-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 flex items-center gap-1">
+                    <Smartphone className="w-3 h-3 text-orange-500" />
+                    IMEI (Telefonia / Tablets / Modems)
+                  </span>
+                  <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100">
+                    {equipment.imei}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

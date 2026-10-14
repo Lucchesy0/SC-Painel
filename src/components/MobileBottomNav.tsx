@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShoppingCart, LayoutDashboard, BarChart3, Boxes, Shield, FileCheck } from 'lucide-react';
 import { ActiveNavTab, UserProfile } from '../types';
+import { getUserPermissions } from '../services/authService';
 import { motion } from 'motion/react';
 import { triggerHaptic } from '../utils/haptics';
 
@@ -33,7 +34,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       icon: <ShoppingCart className="w-5 h-5" />,
       module: 'sc',
       badge: scCount > 0 ? (
-        <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-orange-500 text-white shadow-xs">
+        <span className="absolute -top-1 -right-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-orange-600 text-white">
           {scCount > 99 ? '99+' : scCount}
         </span>
       ) : null,
@@ -45,7 +46,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       icon: <LayoutDashboard className="w-5 h-5" />,
       module: 'sc',
       badge: delayedCount > 0 ? (
-        <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-red-500 text-white shadow-xs animate-pulse">
+        <span className="absolute -top-1 -right-1 px-1 py-0.2 text-[9px] font-bold bg-red-600 text-white">
           {delayedCount}
         </span>
       ) : null,
@@ -65,7 +66,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       icon: <Boxes className="w-5 h-5" />,
       module: 'inventario',
       badge: equipmentCount > 0 ? (
-        <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-blue-500 text-white shadow-xs">
+        <span className="absolute -top-1 -right-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-blue-600 text-white">
           {equipmentCount}
         </span>
       ) : null,
@@ -84,15 +85,18 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const items = allItems.filter((item) => {
     if (isAdmin) return true;
     if (!currentUser) return true;
-    const perms = currentUser.permissions;
+    const userPerms = getUserPermissions(currentUser);
     if (item.module === 'sc') {
-      if (currentUser.canAccessSC === false || perms?.canAccessSC === false) return false;
+      if (!userPerms.canAccessSC) return false;
+      if ((item.id === 'indicadores' || item.id === 'graficos') && !userPerms.canAccessAnalytics) {
+        return false;
+      }
     }
     if (item.module === 'inventario') {
-      if (currentUser.canAccessInventario === false || perms?.canAccessInventario === false) return false;
+      if (!userPerms.canAccessInventario) return false;
     }
     if (item.module === 'termos') {
-      if (currentUser.canAccessTermos === false || perms?.canAccessTermos === false) return false;
+      if (!userPerms.canAccessTermos) return false;
     }
     return true;
   });
@@ -100,7 +104,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Navegação móvel"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#1a1f2c]/95 border-t border-slate-200 dark:border-slate-700/80 backdrop-blur-lg px-2 py-1 flex items-center justify-around shadow-[0_-4px_16px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#1a1f2c]/95 border-t border-slate-200 dark:border-slate-700/80 backdrop-blur-lg px-2 py-1 flex items-center justify-around shadow-[0_-4px_16px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)] print:hidden"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
       {items.map((item) => {

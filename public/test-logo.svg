@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" fill="none">
+  <!-- Outer Loop -->
+  <path
+    d="M 150,68 
+       L 218,22 
+       L 274,68 
+       L 274,172 
+       L 218,218 
+       L 150,172 
+       L 82,218 
+       L 26,172 
+       L 26,68 
+       L 82,22 
+       Z"
+    stroke="#FF5500"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Inner Ribbon Structure -->
+  <!-- Top Inner Chevron & Sides -->
+  <path
+    d="M 68,145 
+       L 68,96 
+       L 94,76 
+       L 150,116 
+       L 206,76 
+       L 232,96 
+       L 232,145"
+    stroke="#FF5500"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Interlocking Lower Diagonal Ribbon -->
+  <path
+    d="M 68,145 
+       L 114,180 
+       L 150,154 
+       L 232,96"
+    stroke="#FF5500"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

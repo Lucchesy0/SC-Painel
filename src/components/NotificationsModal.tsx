@@ -428,7 +428,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
 
               return (
                 <div className="flex flex-col gap-2.5">
-                  {displayList.map((item) => {
+                  {displayList.map((item, index) => {
                     const sc = item.sc;
                     const itemsCount = sc.itens?.length || 0;
 
@@ -452,7 +452,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
 
                     return (
                       <div
-                        key={sc.id || sc.numero}
+                        key={`${sc.id || sc.numero || 'sc'}-${item.tipo}-${index}`}
                         onClick={() => {
                           onSelectSC(sc);
                           onClose();

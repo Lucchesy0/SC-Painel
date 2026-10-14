@@ -42,7 +42,7 @@ interface AdminModalProps {
   equipments?: Equipment[];
   users?: UserProfile[];
   currentUser?: UserProfile;
-  onRefreshUsers?: () => void;
+  onRefreshUsers?: (immediateUser?: UserProfile) => void;
   initialTab?: AdminTab;
   onOpenUsersModal?: () => void;
   onImportData: (scs: SC[], equipments?: Equipment[]) => Promise<void>;

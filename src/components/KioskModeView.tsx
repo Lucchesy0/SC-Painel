@@ -81,7 +81,13 @@ export const KioskModeView: React.FC<KioskModeViewProps> = ({
       }
       const cloudSCs = await dbService.getSCs();
       if (cloudSCs && cloudSCs.length >= 0) {
-        setDataSCs(cloudSCs);
+        const seen = new Set<string>();
+        const unique = cloudSCs.filter((s) => {
+          if (!s?.id || seen.has(s.id)) return false;
+          seen.add(s.id);
+          return true;
+        });
+        setDataSCs(unique);
       }
       setLastSyncTime(new Date());
       setSyncCountdown(refreshIntervalSec);
@@ -114,7 +120,13 @@ export const KioskModeView: React.FC<KioskModeViewProps> = ({
     const unsubscribe = subscribeToFirestoreSCs(
       (cloudList) => {
         if (cloudList && cloudList.length >= 0) {
-          setDataSCs(cloudList);
+          const seen = new Set<string>();
+          const unique = cloudList.filter((s) => {
+            if (!s?.id || seen.has(s.id)) return false;
+            seen.add(s.id);
+            return true;
+          });
+          setDataSCs(unique);
           setLastSyncTime(new Date());
         }
       },
@@ -475,7 +487,7 @@ export const KioskModeView: React.FC<KioskModeViewProps> = ({
 
                       return (
                         <motion.tr
-                          key={sc.id || idx}
+                          key={sc.id ? `${sc.id}-${idx}` : `kiosk-sc-${idx}`}
                           layout
                           initial={{ opacity: 0, y: 4 }}
                           animate={{ opacity: 1, y: 0 }}

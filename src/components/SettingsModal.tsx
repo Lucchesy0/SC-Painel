@@ -30,13 +30,19 @@ import {
   Cpu,
   RefreshCw,
   Eye,
+  EyeOff,
   SlidersHorizontal,
+  FileSignature,
+  KeyRound,
+  HelpCircle,
+  Send,
 } from 'lucide-react';
 import { SC, Equipment, ThemeMode } from '../types';
 import { exportToCSV, exportEquipmentsToCSV } from '../utils/storage';
 import { getSlaSettings, saveSlaSettings } from '../utils/sla';
 import { downloadIDBBackupFile, FullBackupPayload } from '../services/backupService';
 import { dbService } from '../services/dbService';
+import { autentiqueService } from '../services/autentiqueService';
 import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
 import { MCMLogo } from './MCMLogo';
 import { motion, AnimatePresence } from 'motion/react';
@@ -145,6 +151,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [smartRmParser, setSmartRmParser] = useState<boolean>(() => {
     return localStorage.getItem('mcm_setting_smart_parser') !== 'false';
   });
+
+  // --- AUTENTIQUE INTEGRATION (ETAPA 1) ---
+  const [autentiqueConfig, setAutentiqueConfig] = useState(() => autentiqueService.getConfig());
+  const [autentiqueToken, setAutentiqueToken] = useState(() => autentiqueService.getConfig().token);
+  const [autentiqueEnv, setAutentiqueEnv] = useState<'production' | 'sandbox'>(
+    () => autentiqueService.getConfig().environment || 'production'
+  );
+  const [autentiqueSignerName, setAutentiqueSignerName] = useState(
+    () => autentiqueService.getConfig().defaultSignerName || 'TI MCM Montagens'
+  );
+  const [autentiqueSignerEmail, setAutentiqueSignerEmail] = useState(
+    () => autentiqueService.getConfig().defaultSignerEmail || 'ti@mcmmontagens.com'
+  );
+  const [showAutentiqueToken, setShowAutentiqueToken] = useState(false);
+  const [isTestingAutentique, setIsTestingAutentique] = useState(false);
+  const [showAutentiqueHelp, setShowAutentiqueHelp] = useState(false);
+  const [autentiqueTestResult, setAutentiqueTestResult] = useState<{
+    tested: boolean;
+    success: boolean;
+    message: string;
+    user?: { id?: string; name?: string; email?: string };
+  } | null>(null);
 
   // --- SECURITY & DANGER ZONE ---
   const [requireDeleteConfirm, setRequireDeleteConfirm] = useState<boolean>(() => {
@@ -286,13 +314,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onToast('Parâmetros de SLA e Notificações atualizados com sucesso!', 'success');
   };
 
-  // Save Integrations
+  // Save Integrations (TOTVS RM)
   const handleSaveIntegrations = () => {
     localStorage.setItem('mcm_setting_rm_url', totvsRmUrl);
     localStorage.setItem('mcm_setting_sync_interval', String(autoSyncInterval));
     localStorage.setItem('mcm_setting_smart_parser', String(smartRmParser));
     triggerCompletionFeedback();
     onToast('Configurações de integração TOTVS RM salvas!', 'success');
+  };
+
+  // Testar Conexão com Autentique (Etapa 1)
+  const handleTestAutentique = async () => {
+    if (!autentiqueToken.trim()) {
+      onToast('Informe o Token da API Autentique antes de testar.', 'error');
+      setAutentiqueTestResult({
+        tested: true,
+        success: false,
+        message: 'Por favor, insira o Token de API do Autentique no campo acima.',
+      });
+      return;
+    }
+
+    setIsTestingAutentique(true);
+    setAutentiqueTestResult(null);
+
+    try {
+      const res = await autentiqueService.testConnection(autentiqueToken, autentiqueEnv);
+      if (res.success) {
+        triggerCompletionFeedback();
+        setAutentiqueTestResult({
+          tested: true,
+          success: true,
+          message: `Conexão bem-sucedida! Conta Autentique validada: ${res.user?.name || 'Usuário Autentique'} (${res.user?.email || 'Token Ativo'})`,
+          user: res.user,
+        });
+        setAutentiqueConfig(autentiqueService.getConfig());
+        onToast('Conexão com a API do Autentique validada com sucesso!', 'success');
+      } else {
+        triggerHaptic('heavy');
+        setAutentiqueTestResult({
+          tested: true,
+          success: false,
+          message: res.error || 'Não foi possível autenticar o token na API do Autentique.',
+        });
+        onToast(res.error || 'Erro ao autenticar com o Autentique.', 'error');
+      }
+    } catch (err: any) {
+      setAutentiqueTestResult({
+        tested: true,
+        success: false,
+        message: err?.message || 'Falha na comunicação de rede com o serviço do Autentique.',
+      });
+      onToast('Erro ao testar conexão com Autentique.', 'error');
+    } finally {
+      setIsTestingAutentique(false);
+    }
+  };
+
+  // Salvar Configurações Autentique
+  const handleSaveAutentique = () => {
+    const updated = autentiqueService.saveConfig({
+      token: autentiqueToken.trim(),
+      environment: autentiqueEnv,
+      defaultSignerName: autentiqueSignerName.trim(),
+      defaultSignerEmail: autentiqueSignerEmail.trim(),
+    });
+    setAutentiqueConfig(updated);
+    triggerCompletionFeedback();
+    onToast('Configurações da integração Autentique salvas!', 'success');
   };
 
   // Export Full JSON Backup
@@ -400,7 +489,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'general' as SettingsSection, label: 'Geral & Empresa', icon: Building },
     { id: 'appearance' as SettingsSection, label: 'Aparência & Tema', icon: Sun },
     { id: 'notifications' as SettingsSection, label: 'Alertas & SLA', icon: Bell },
-    { id: 'integrations' as SettingsSection, label: 'Integrações TOTVS', icon: Sliders },
+    { id: 'integrations' as SettingsSection, label: 'Integrações (Autentique / RM)', icon: Sliders },
     { id: 'storage' as SettingsSection, label: 'Backup & Dados', icon: HardDrive },
     { id: 'security' as SettingsSection, label: 'Segurança & Zona de Risco', icon: Shield },
     { id: 'about' as SettingsSection, label: 'Sobre o Sistema', icon: Info },
@@ -917,96 +1006,357 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* 4. INTEGRAÇÕES & TOTVS RM */}
+            {/* 4. INTEGRAÇÕES & TOTVS RM & AUTENTIQUE */}
             {activeSection === 'integrations' && (
               <div className="space-y-6 animate-in fade-in duration-150">
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 mb-1">
-                    Integrações & TOTVS RM
+                    Integrações & Conexões Externas
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Configure a conexão rápida e sincronização com o ERP TOTVS RM da MCM.
+                    Gerencie conexões para assinatura digital (Autentique) e integração com o ERP TOTVS RM da MCM.
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  {/* RM Portal URL */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      URL do Portal TOTVS RM / Corpore.Net
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={totvsRmUrl}
-                        onChange={(e) => setTotvsRmUrl(e.target.value)}
-                        placeholder="https://rm.mcm.com.br/..."
-                        className="flex-1 h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-                      />
-                      <a
-                        href={totvsRmUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold flex items-center gap-1.5"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        <span>Abrir RM</span>
-                      </a>
+                {/* ===== CARD 1: AUTENTIQUE (ASSINATURA ELETRÔNICA) ===== */}
+                <div className="p-4 sm:p-5 rounded-2xl border border-orange-500/25 dark:border-orange-500/30 bg-gradient-to-br from-orange-50/50 via-white to-amber-50/30 dark:from-[#1e2330] dark:via-[#191e2b] dark:to-[#171c26] space-y-4 shadow-xs">
+                  {/* Card Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-orange-100 dark:border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 flex items-center justify-center shrink-0">
+                        <FileSignature className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                            Autentique - Assinatura Eletrônica & Digital
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50">
+                            Etapa 1
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Assinatura digital e remota com validade jurídica oficial (MP 2.200-2/2001 e Lei 14.063/2020).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div className="self-start sm:self-center shrink-0">
+                      {autentiqueConfig.isConnected ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-500/30">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Conectado</span>
+                          {autentiqueConfig.accountInfo?.name && (
+                            <span className="text-[10px] opacity-80 hidden md:inline">
+                              ({autentiqueConfig.accountInfo.name})
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-500/30">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Não Conectado</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Sync Interval */}
-                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/40 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        Intervalo de Auto-Sincronização em Segundo Plano
-                      </label>
-                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                        {autoSyncInterval}s
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Sincroniza automaticamente alterações entre abas e dispositivos conectados.
-                    </p>
-                    <input
-                      type="range"
-                      min="10"
-                      max="120"
-                      step="5"
-                      value={autoSyncInterval}
-                      onChange={(e) => setAutoSyncInterval(Number(e.target.value))}
-                      className="w-full accent-emerald-500 cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Smart Parser */}
-                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/40 flex items-center justify-between">
+                  {/* Form Fields */}
+                  <div className="space-y-3.5">
+                    {/* Token Field */}
                     <div>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                        Auto-Detecção Inteligente de Colunas Copiadas
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        Identifica automaticamente colunas coladas do Excel / RM (Número, Data, Solicitante, Item)
-                      </span>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-orange-500" />
+                          Token de API (Bearer)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowAutentiqueHelp((prev) => !prev)}
+                          className="text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <HelpCircle className="w-3 h-3" />
+                          <span>{showAutentiqueHelp ? 'Ocultar instruções' : 'Onde gerar o Token?'}</span>
+                        </button>
+                      </div>
+
+                      <div className="relative flex items-center">
+                        <input
+                          type={showAutentiqueToken ? 'text' : 'password'}
+                          value={autentiqueToken}
+                          onChange={(e) => setAutentiqueToken(e.target.value)}
+                          placeholder="Cole aqui seu Token da Autentique (ex: 5c91b...)"
+                          className="w-full h-10 pl-3.5 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 font-mono focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAutentiqueToken((prev) => !prev)}
+                          className="absolute right-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                          title={showAutentiqueToken ? 'Ocultar token' : 'Visualizar token'}
+                        >
+                          {showAutentiqueToken ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={smartRmParser}
-                      onChange={(e) => setSmartRmParser(e.target.checked)}
-                      className="w-5 h-5 accent-orange-600 rounded cursor-pointer"
-                    />
+
+                    {/* Tutorial / Help Box */}
+                    {showAutentiqueHelp && (
+                      <div className="p-3.5 rounded-xl border border-orange-200 dark:border-orange-900/40 bg-orange-50/80 dark:bg-orange-950/20 text-xs text-slate-700 dark:text-slate-300 space-y-1.5 animate-in fade-in duration-150">
+                        <div className="font-bold text-orange-800 dark:text-orange-300 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" /> Como obter o Token no painel do Autentique:
+                        </div>
+                        <ol className="list-decimal pl-4 space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
+                          <li>
+                            Acesse sua conta no{' '}
+                            <a
+                              href="https://painel.autentique.com.br"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-bold text-orange-600 hover:underline inline-flex items-center gap-0.5"
+                            >
+                              painel.autentique.com.br <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          </li>
+                          <li>
+                            No menu do usuário ou lateral, acesse <strong>Configurações</strong> &gt; <strong>Integrações / API</strong>.
+                          </li>
+                          <li>
+                            Clique em <strong>"Gerar Novo Token"</strong> e dê um nome (ex: <em>Portal MCM</em>).
+                          </li>
+                          <li>
+                            Copie o token gerado, cole no campo acima e clique em <strong>"Testar Conexão"</strong>.
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* Environment & Signer Default Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      {/* Environment selector */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                          Ambiente de Operação
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => setAutentiqueEnv('production')}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              autentiqueEnv === 'production'
+                                ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 shadow-2xs'
+                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            Produção (Oficial)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAutentiqueEnv('sandbox')}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              autentiqueEnv === 'sandbox'
+                                ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 shadow-2xs'
+                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            Sandbox (Testes)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Default Signer TI Name */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                          Nome do Responsável TI (Signatário Padrão)
+                        </label>
+                        <input
+                          type="text"
+                          value={autentiqueSignerName}
+                          onChange={(e) => setAutentiqueSignerName(e.target.value)}
+                          placeholder="TI MCM Montagens"
+                          className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                        />
+                      </div>
+
+                      {/* Default Signer TI Email */}
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                          E-mail do Responsável TI (Receberá cópia e visto nos termos)
+                        </label>
+                        <input
+                          type="email"
+                          value={autentiqueSignerEmail}
+                          onChange={(e) => setAutentiqueSignerEmail(e.target.value)}
+                          placeholder="ti@mcmmontagens.com"
+                          className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Test Feedback Result Alert */}
+                    {autentiqueTestResult && (
+                      <div
+                        className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 animate-in fade-in duration-200 ${
+                          autentiqueTestResult.success
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                            : 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-900 dark:text-red-200'
+                        }`}
+                      >
+                        {autentiqueTestResult.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1">
+                          <p className="font-bold">
+                            {autentiqueTestResult.success
+                              ? 'Conexão validada com sucesso!'
+                              : 'Falha no teste de conexão'}
+                          </p>
+                          <p className="text-[11px] opacity-90 mt-0.5">
+                            {autentiqueTestResult.message}
+                          </p>
+                          {autentiqueTestResult.user?.id && (
+                            <p className="text-[10px] font-mono opacity-70 mt-1">
+                              ID da Conta: {autentiqueTestResult.user.id}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons for Autentique */}
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestAutentique}
+                        disabled={isTestingAutentique}
+                        className="px-4 py-2 rounded-xl border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-800 hover:bg-orange-50 dark:hover:bg-slate-700 text-orange-600 dark:text-orange-400 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-2xs active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {isTestingAutentique ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Validando com API Autentique...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Testar Conexão com Autentique</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveAutentique}
+                        className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs active:scale-95 transition-all"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Salvar Configurações Autentique</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSaveIntegrations}
-                    className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs active:scale-95 transition-all"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>Salvar Configurações RM</span>
-                  </button>
+                {/* ===== CARD 2: ERP TOTVS RM ===== */}
+                <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/30 space-y-4">
+                  <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                    <div className="w-10 h-10 rounded-xl bg-slate-200/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                      <FileSpreadsheet className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                        Integração ERP TOTVS RM / Corpore.Net
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Sincronização de solicitações de compra e importação de planilhas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* RM Portal URL */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        URL do Portal TOTVS RM / Corpore.Net
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={totvsRmUrl}
+                          onChange={(e) => setTotvsRmUrl(e.target.value)}
+                          placeholder="https://rm.mcm.com.br/..."
+                          className="flex-1 h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
+                        />
+                        <a
+                          href={totvsRmUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 text-xs font-bold flex items-center gap-1.5"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Abrir RM</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Sync Interval */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/60 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Intervalo de Auto-Sincronização em Segundo Plano
+                        </label>
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                          {autoSyncInterval}s
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Sincroniza automaticamente alterações entre abas e dispositivos conectados.
+                      </p>
+                      <input
+                        type="range"
+                        min="10"
+                        max="120"
+                        step="5"
+                        value={autoSyncInterval}
+                        onChange={(e) => setAutoSyncInterval(Number(e.target.value))}
+                        className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Smart Parser */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/60 flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                          Auto-Detecção Inteligente de Colunas Copiadas
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          Identifica automaticamente colunas coladas do Excel / RM (Número, Data, Solicitante, Item)
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={smartRmParser}
+                        onChange={(e) => setSmartRmParser(e.target.checked)}
+                        className="w-5 h-5 accent-orange-600 rounded cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleSaveIntegrations}
+                      className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-xs active:scale-95 transition-all"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Salvar Configurações RM</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -62,12 +62,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       const result = await authService.authenticateByCredentials(kioskUsername, kioskPassword);
       if (result.success && result.user) {
         setIsKioskModalOpen(false);
-        // Garantir que entra no modo quiosque
-        const userToLog = result.user.role === 'kiosk' || result.user.isKiosk
-          ? result.user
-          : { ...result.user, isKiosk: true, role: 'kiosk' };
-        authService.setAuthenticatedUser(userToLog);
-        onLoginSuccess(userToLog);
+        // Entra no modo quiosque utilizando o perfil de terminal de TV/Quiosque
+        // Mantém o perfil original do usuário autorizador 100% intacto (não altera para role='kiosk')
+        const kioskSessionUser: UserProfile = {
+          ...INITIAL_KIOSK_USER,
+          departamento: `Autorizado por: ${result.user.nome}`,
+        };
+        authService.setAuthenticatedUser(kioskSessionUser);
+        onLoginSuccess(kioskSessionUser);
       } else {
         setKioskError(result.error || 'Credenciais inválidas para acesso ao Modo Quiosque.');
       }

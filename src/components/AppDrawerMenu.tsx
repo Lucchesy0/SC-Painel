@@ -204,14 +204,16 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
               {currentUser && (
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={`w-8 h-8 rounded-lg ${
-                        currentUser.avatarColor || 'bg-slate-700'
-                      } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
-                    >
-                      {currentUser.nome.charAt(0).toUpperCase()}
+                    <div className="relative shrink-0 flex items-center justify-center">
+                      <div
+                        className={`w-8 h-8 rounded-lg ${
+                          currentUser?.avatarColor || 'bg-slate-700'
+                        } text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}
+                      >
+                        {(currentUser?.nome || 'U').charAt(0).toUpperCase()}
+                      </div>
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                        className={`absolute -bottom-0.5 -right-0.5 translate-x-1/4 translate-y-1/4 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
                           isUserOnline(currentUser, currentUser)
                             ? 'bg-emerald-500'
                             : 'bg-rose-500'
@@ -221,10 +223,10 @@ export const AppDrawerMenu: React.FC<AppDrawerMenuProps> = ({
                     </div>
                     <div className="min-w-0 truncate">
                       <span className="text-xs font-bold text-slate-800 block truncate leading-snug">
-                        {currentUser.nome}
+                        {currentUser?.nome || 'Usuário'}
                       </span>
                       <span className="text-[11px] text-slate-500 font-medium block leading-none">
-                        {userCargo}
+                        {currentUser.departamento || (currentUser.role === 'admin' ? 'Administrador' : 'Colaborador')}
                       </span>
                     </div>
                   </div>

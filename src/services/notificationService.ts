@@ -119,8 +119,8 @@ export function sendBrowserNotification(
 
   try {
     const notification = new Notification(title, {
-      icon: '/logo-mcm.svg',
-      badge: '/logo-mcm.svg',
+      icon: '/favicon-32x32.png',
+      badge: '/favicon-32x32.png',
       tag: options?.tag || 'mcm-sc-alert',
       ...options,
     });

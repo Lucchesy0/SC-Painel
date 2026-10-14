@@ -72,7 +72,7 @@ export type ActiveTab = 'principal' | 'dashboards' | 'lista';
 
 export type EquipmentStatus = 'Ativado' | 'Desativado' | 'Manutenção' | 'Em Uso' | 'Disponível';
 
-export type TermStatus = 'Ativo' | 'Devolvido' | 'Pendente';
+export type TermStatus = 'Ativo' | 'Devolvido' | 'Pendente' | 'Concluído';
 
 export interface TermEquipmentItem {
   equipmentId?: string; // ID do equipamento no inventário, se vinculado
@@ -85,36 +85,87 @@ export interface TermEquipmentItem {
   valorEstimado?: number;
 }
 
+export type TermCategory = 'notebook' | 'celular' | 'tablet' | 'devolucao';
+
+export type ReturnType =
+  | 'Celular'
+  | 'Notebook'
+  | 'Modem'
+  | 'Celular e Notebook'
+  | 'Celular e Modem'
+  | 'Notebook e Modem'
+  | 'Outro'
+  // compatibilidade legada
+  | 'desligamento'
+  | 'substituicao'
+  | 'manutencao'
+  | 'fim_projeto'
+  | 'devolucao_definitiva'
+  | 'emprestimo_temporario'
+  | 'outro';
+
+export interface ReturnTypeDefinition {
+  id: string; // Identificador único (ex: 'Notebook', 'Celular', etc.)
+  nome: string; // Nome legível do tipo de devolução
+  icone: string; // Emoji ou identificador de ícone
+  descricao: string; // Descrição explicativa
+  templatePadrao: string; // Template de preenchimento para o campo 'Detalhes da Devolução'
+  observacaoPadrao?: string; // Observação padrão sugerida (ex: 'Com carregador.')
+  isDefault?: boolean; // Se é um dos 6 tipos oficiais nativos
+  ordem?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ResponsibilityTerm {
   id: string;
-  numeroTermo: string; // ex: TR-2026-001 ou AF-30466
+  numeroTermo: string; // ex: TR-2026-001 ou AF-30466 ou CEL-98226-8217 ou TAB-40120 ou DEV-2026-001
+  categoriaTermo?: TermCategory; // 'notebook' (padrão) | 'celular' | 'tablet' | 'devolucao'
   tipo?: 'Entrega' | 'Devolucao' | 'Emprestimo';
+  tipoDevolucao?: ReturnType | string; // Tipo específico da devolução (ex: 'Celular', 'Notebook', 'Modem', etc.)
+  detalhesDevolucao?: string; // Detalhes da devolução conforme template RG.TI.004 (Modelo, Marca, AF, Imei Chip, Imei Celular)
+  observacaoDevolucao?: string; // Observação da devolução (ex: "Com carregador.")
+  motivoDevolucao?: string; // Motivo da devolução
+  recebidoPor?: string; // Nome do responsável da TI que conferiu e recebeu o item
+  estadoConservacaoDevolucao?: string; // ex: 'Novo', 'Excelente', 'Bom', 'Regular', 'Com Defeito'
+  acessoriosDevolvidos?: string[]; // Carregador, Cabo, Mochila, Mouse, Chip, Capa, Caneta, etc.
+  observacoesDevolucao?: string;
+  termoEntregaOrigemId?: string; // ID ou AF do termo de entrega original se houver
   dataEmissao: string; // YYYY-MM-DD
   dataDevolucaoPrevista?: string; // YYYY-MM-DD
   dataDevolucaoEfetiva?: string; // YYYY-MM-DD
   status: TermStatus;
 
   // Documento Oficial Modelo
-  tituloDocumento?: string; // Padrão: "Termo de Responsabilidade Notebook"
-  codigoDocumento?: string; // Padrão: "RG.TI.001 Rev00 10ago2020"
+  tituloDocumento?: string; // Padrão: "Termo de Responsabilidade Notebook" ou "Termo de Responsabilidade Celular Corporativo" ou "Termo de Responsabilidade Tablet Corporativo"
+  codigoDocumento?: string; // Padrão: "RG.TI.001 Rev00 10ago2020", "RG.TI.002 Rev00 10ago2020" ou "RG.TI.003 Rev00 10ago2020"
 
   // Colaborador / Responsável
-  colaboradorNome: string; // Nome em destaque (ex: Nise Luis de Lima)
+  colaboradorNome: string; // Nome em destaque (ex: Nise Luis de Lima ou Keity Miyuki Mathias Hirae)
   colaboradorId?: string;
   colaboradorCargo?: string;
   colaboradorDepartamento?: string;
   colaboradorDocumento?: string; // CPF ou Matrícula
   colaboradorEmail?: string;
 
-  // Dados do Aparelho Notebook (Conforme modelo oficial)
-  modelo: string; // ex: "VOSTRO 3480"
-  processador: string; // ex: "Intel Core I5"
-  memoria: string; // ex: "8 GB"
-  capacidadeHD: string; // ex: "SSD 256 GB"
-  af: string; // ex: "30466"
+  // Dados do Aparelho (Notebook, Celular ou Tablet)
+  modelo: string; // ex: "VOSTRO 3480" ou "APENAS CHIP" / "SAMSUNG GALAXY A14" / "SAMSUNG GALAXY TAB A9+"
+  processador?: string; // ex: "Intel Core I5" (Notebook)
+  memoria?: string; // ex: "8 GB" (Notebook)
+  capacidadeHD?: string; // ex: "SSD 256 GB" (Notebook)
+  af?: string; // ex: "30466" (Notebook / Tablet)
 
-  // Checklists oficiais
-  checklistVerificacao: {
+  // Dados Específicos para Celular e Tablet (Modelo Oficial RG.TI.002 e RG.TI.003)
+  comCarregador?: boolean; // Padrão: false / 'NÃO' ou true / 'SIM'
+  comCapaProtecao?: boolean; // Padrão Tablet: true / 'SIM' ou false / 'NÃO'
+  comCaneta?: boolean; // Padrão Tablet: true / 'SIM' (S-Pen / Stylus) ou false
+  imeiChip?: string; // ex: "8955118512900069883729" (ICCID do Chip SIM)
+  imeiCelular?: string; // ex: "0" ou IMEI do aparelho celular/tablet (15 dígitos)
+  imeiTablet?: string; // IMEI do Tablet (15 dígitos)
+  numeroLinha?: string; // ex: "81-98226-8217"
+
+  // Checklists oficiais (Notebook)
+  checklistVerificacao?: {
     oneDrive?: boolean;
     teams?: boolean;
     office365?: boolean;
@@ -127,7 +178,7 @@ export interface ResponsibilityTerm {
     [key: string]: boolean | undefined;
   };
 
-  opcionais: {
+  opcionais?: {
     zwcad?: boolean;
     dwgNaviswork?: boolean;
     powerBi?: boolean;
@@ -136,8 +187,8 @@ export interface ResponsibilityTerm {
   };
 
   // Centro de Custo, Cidade e Assinatura
-  centroCusto?: string; // ex: "CEQ - Central de Equipamentos"
-  cidade?: string; // Fixo: "Escada, PE"
+  centroCusto?: string; // ex: "988" ou "CEQ - Central de Equipamentos"
+  cidade?: string; // "Recife" ou "Escada, PE"
 
   // Local & Finalidade (Opcionais adicionais)
   localUso?: string;
@@ -158,6 +209,11 @@ export interface ResponsibilityTerm {
   assinaturaUrl?: string; // Data URL com desenho da rubrica/assinatura
   dataAssinatura?: string;
 
+  // Rastreabilidade de Emissão / Download do PDF
+  ultimoPdfGeradoEm?: string; // Data e hora ISO do último PDF gerado/baixado
+  ultimoPdfGeradoPor?: string; // Nome do colaborador ou usuário logado que gerou/baixou o PDF
+  ultimoPdfDownloadCount?: number; // Total de vezes que o PDF foi gerado ou baixado
+
   createdAt?: string;
   updatedAt?: string;
 }
@@ -175,7 +231,8 @@ export interface Equipment {
   id: string;
   codigoPatrimonio: string; // AF (Ativo Fixo / Código AF)
   nome: string;
-  categoria: string;
+  categoria: string; // ex: Equipamentos
+  subcategoria?: string; // ex: Tablet
   marcaModelo?: string;
   status: EquipmentStatus;
   localizacao: string; // ex: Empresa (Rack A / Sede) ou Assistência Técnica
@@ -184,6 +241,7 @@ export interface Equipment {
   imageUrl?: string;
   dataManutencao?: string;
   numeroSerie?: string; // Serial / Service Tag
+  imei?: string; // IMEI (15 ou 17 dígitos numéricos para telefonia/tablets/modems)
   responsavel?: string; // Colaborador / Depto atribuído
   usuarioResponsavel?: string; // Alias para compatibilidade
   ipAddress?: string; // IP / MAC / Hostname

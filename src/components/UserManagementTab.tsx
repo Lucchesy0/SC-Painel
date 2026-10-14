@@ -45,7 +45,7 @@ import { UserPresenceBadge } from './UserPresenceBadge';
 interface UserManagementTabProps {
   users?: UserProfile[];
   currentUser: UserProfile;
-  onRefreshUsers: () => void;
+  onRefreshUsers: (immediateUser?: UserProfile) => void;
   onToast: (text: string, type: 'success' | 'error' | 'info') => void;
 }
 
@@ -86,7 +86,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
   const [formData, setFormData] = useState<{
     nome: string;
     email: string;
-    cargo: string;
     departamento: string;
     password: string;
     avatarColor: string;
@@ -94,8 +93,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
   }>({
     nome: '',
     email: '',
-    cargo: 'Comprador',
-    departamento: 'Suprimentos & Compras',
+    departamento: '',
     password: '',
     avatarColor: 'bg-slate-700',
     permissions: { ...DEFAULT_USER_PERMISSIONS },
@@ -114,24 +112,11 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     { label: 'Ciano', class: 'bg-cyan-700' },
   ];
 
-  // Sugestões rápidas de preenchimento de cargo para agilidade do usuário
-  const cargoSuggestions = [
-    'Comprador',
-    'Analista de Suprimentos',
-    'Coordenador de TI',
-    'Técnico de Campo',
-    'Gestor / Diretoria',
-    'Administrador Geral',
-    'Assistente Administrativo',
-    'Engenheiro de Obras',
-  ];
-
   const handleOpenAdd = () => {
     setFormData({
       nome: '',
       email: '',
-      cargo: 'Comprador',
-      departamento: 'Suprimentos',
+      departamento: '',
       password: '',
       avatarColor: 'bg-slate-700',
       permissions: { ...DEFAULT_USER_PERMISSIONS },
@@ -145,8 +130,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     setFormData({
       nome: user.nome,
       email: user.email,
-      cargo: getUserCargo(user),
-      departamento: user.departamento || 'Geral',
+      departamento: user.departamento || '',
       password: user.password || '',
       avatarColor: user.avatarColor || 'bg-slate-700',
       permissions: { ...userPerms },
@@ -265,10 +249,10 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
 
     setIsSubmitting(true);
     try {
-      await authService.createUser({
+      const created = await authService.createUser({
         nome: formData.nome.trim(),
         email: formData.email.trim(),
-        cargo: formData.cargo.trim() || 'Colaborador',
+        cargo: '',
         departamento: formData.departamento.trim() || 'Geral',
         password: formData.password ? formData.password.trim() : undefined,
         avatarColor: formData.avatarColor,
@@ -280,7 +264,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
       });
       onToast(`Usuário ${formData.nome} cadastrado com sucesso.`, 'success');
       setIsAddModalOpen(false);
-      onRefreshUsers();
+      onRefreshUsers(created || undefined);
     } catch (err) {
       console.error('Erro ao cadastrar usuário:', err);
       onToast('Erro ao cadastrar usuário.', 'error');
@@ -299,10 +283,10 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
 
     setIsSubmitting(true);
     try {
-      await authService.updateUser(editingUser.id, {
+      const updated = await authService.updateUser(editingUser.id, {
         nome: formData.nome.trim(),
         email: formData.email.trim(),
-        cargo: formData.cargo.trim() || 'Colaborador',
+        cargo: '',
         departamento: formData.departamento.trim() || 'Geral',
         password: formData.password ? formData.password.trim() : undefined,
         avatarColor: formData.avatarColor,
@@ -317,7 +301,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
       });
       onToast(`Usuário ${formData.nome} atualizado com sucesso.`, 'success');
       setEditingUser(null);
-      onRefreshUsers();
+      onRefreshUsers(updated || undefined);
     } catch (err) {
       console.error('Erro ao atualizar usuário:', err);
       onToast('Erro ao atualizar dados do usuário.', 'error');
@@ -333,7 +317,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
     setIsSubmitting(true);
     try {
       const trimmed = newPassword.trim();
-      await authService.updateUser(passwordModalUser.id, {
+      const updated = await authService.updateUser(passwordModalUser.id, {
         password: trimmed ? trimmed : undefined,
         requiresPassword: Boolean(trimmed.length > 0),
       });
@@ -345,7 +329,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
       );
       setPasswordModalUser(null);
       setNewPassword('');
-      onRefreshUsers();
+      onRefreshUsers(updated || undefined);
     } catch (err) {
       console.error('Erro ao alterar senha:', err);
       onToast('Erro ao atualizar senha do usuário.', 'error');
@@ -375,7 +359,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
       if (presenceFilter === 'offline' && isOnline) return false;
 
       const term = searchTerm.trim().toLowerCase();
-      const cargo = getUserCargo(user).toLowerCase();
       const depto = (user.departamento || '').toLowerCase();
       const nome = user.nome.toLowerCase();
       const email = user.email.toLowerCase();
@@ -384,7 +367,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
         term === '' ||
         nome.includes(term) ||
         email.includes(term) ||
-        cargo.includes(term) ||
         depto.includes(term);
 
       const perms = getUserPermissions(user);
@@ -462,201 +444,203 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
         </div>
       </div>
 
-      {/* 1. Módulos Principais do Sistema (Grandes Caixas Interativas) */}
+      {/* 1. Módulos com Acesso Liberado no Menu */}
       <div className="space-y-1.5">
-        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
-          1. Módulos com Acesso Liberado no Menu
+        <label className="text-xs font-semibold text-slate-700 block">
+          1. Módulos com Acesso Liberado
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           {/* Módulo SC */}
           <div
             onClick={() => handleTogglePermission('canAccessSC')}
-            className={`p-3 rounded-xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between ${
+            className={`p-3 rounded-lg border transition-colors cursor-pointer select-none flex flex-col justify-between ${
               formData.permissions.canAccessSC
-                ? 'bg-orange-50/70 border-orange-400 shadow-2xs'
-                : 'bg-white border-slate-200 hover:border-slate-300 opacity-75'
+                ? 'bg-slate-50 border-slate-700'
+                : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${formData.permissions.canAccessSC ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                <div className={`w-7 h-7 rounded-md flex items-center justify-center ${formData.permissions.canAccessSC ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   <ShoppingCart className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 leading-tight">Solicitações (SC)</h4>
-                  <span className="text-[10px] text-slate-500">Compras e prazos</span>
+                  <h4 className="text-xs font-semibold text-slate-900">Solicitações (SC)</h4>
+                  <span className="text-[11px] text-slate-500">Compras</span>
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={formData.permissions.canAccessSC}
                 onChange={() => {}}
-                className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 pointer-events-none mt-0.5"
+                className="w-4 h-4 text-slate-900 rounded focus:ring-slate-900 pointer-events-none mt-0.5"
               />
             </div>
-            <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
-              Permite visualizar a lista e status das ordens de compra da empresa.
+            <p className="text-xs text-slate-500 mt-2">
+              Visualizar solicitações e status de compras.
             </p>
           </div>
 
           {/* Módulo Inventário TI */}
           <div
             onClick={() => handleTogglePermission('canAccessInventario')}
-            className={`p-3 rounded-xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between ${
+            className={`p-3 rounded-lg border transition-colors cursor-pointer select-none flex flex-col justify-between ${
               formData.permissions.canAccessInventario
-                ? 'bg-cyan-50/70 border-cyan-400 shadow-2xs'
-                : 'bg-white border-slate-200 hover:border-slate-300 opacity-75'
+                ? 'bg-slate-50 border-slate-700'
+                : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${formData.permissions.canAccessInventario ? 'bg-cyan-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                <div className={`w-7 h-7 rounded-md flex items-center justify-center ${formData.permissions.canAccessInventario ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   <Boxes className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 leading-tight">Inventário TI</h4>
-                  <span className="text-[10px] text-slate-500">Ativos e máquinas</span>
+                  <h4 className="text-xs font-semibold text-slate-900">Inventário TI</h4>
+                  <span className="text-[11px] text-slate-500">Ativos</span>
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={formData.permissions.canAccessInventario}
                 onChange={() => {}}
-                className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500 pointer-events-none mt-0.5"
+                className="w-4 h-4 text-slate-900 rounded focus:ring-slate-900 pointer-events-none mt-0.5"
               />
             </div>
-            <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
-              Permite acessar o catálogo geral de equipamentos e patrimônio de TI.
+            <p className="text-xs text-slate-500 mt-2">
+              Acesso ao catálogo e patrimônio de TI.
             </p>
           </div>
 
           {/* Módulo Termos TI */}
           <div
             onClick={() => handleTogglePermission('canAccessTermos')}
-            className={`p-3 rounded-xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between ${
+            className={`p-3 rounded-lg border transition-colors cursor-pointer select-none flex flex-col justify-between ${
               formData.permissions.canAccessTermos
-                ? 'bg-purple-50/80 border-purple-400 shadow-2xs'
-                : 'bg-white border-slate-200 hover:border-slate-300 opacity-75'
+                ? 'bg-slate-50 border-slate-700'
+                : 'bg-white border-slate-200 hover:border-slate-300'
             }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${formData.permissions.canAccessTermos ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                <div className={`w-7 h-7 rounded-md flex items-center justify-center ${formData.permissions.canAccessTermos ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   <FileCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-purple-950 leading-tight">Termos TI</h4>
-                  <span className="text-[10px] text-purple-700">Responsabilidade</span>
+                  <h4 className="text-xs font-semibold text-slate-900">Termos TI</h4>
+                  <span className="text-[11px] text-slate-500">Responsabilidade</span>
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={formData.permissions.canAccessTermos}
                 onChange={() => {}}
-                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 pointer-events-none mt-0.5"
+                className="w-4 h-4 text-slate-900 rounded focus:ring-slate-900 pointer-events-none mt-0.5"
               />
             </div>
-            <p className="text-[11px] text-purple-900/80 mt-2 leading-relaxed">
-              Permite gerenciar, emitir e imprimir termos de entrega de notebooks.
+            <p className="text-xs text-slate-500 mt-2">
+              Emitir e gerenciar termos de entrega de máquinas.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. Permissões Detalhadas (Divididas em 2 colunas amplas) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-        
-        {/* Bloco TI & Termos */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 pb-1 border-b border-slate-200">
-            <Shield className="w-3.5 h-3.5 text-cyan-600" />
-            <span>Operações em TI & Termos</span>
+      {/* 2. Permissões Detalhadas */}
+      <div className="space-y-3 pt-1">
+        <label className="text-xs font-semibold text-slate-700 block">
+          2. Permissões de Ação Específicas
+        </label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Operações de Compras */}
+          <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+            <span className="text-xs font-semibold text-slate-800 block pb-1 border-b border-slate-100">
+              Compras (SC)
+            </span>
+
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.canCreateSC}
+                  onChange={() => handleTogglePermission('canCreateSC')}
+                  className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 mt-0.5"
+                />
+                <div>
+                  <span className="font-medium text-slate-900 block">Criar novas solicitações</span>
+                  <span className="text-[11px] text-slate-500">Cadastrar novos pedidos de compra</span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.canEditSC}
+                  onChange={() => handleTogglePermission('canEditSC')}
+                  className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 mt-0.5"
+                />
+                <div>
+                  <span className="font-medium text-slate-900 block">Editar dados e prazos</span>
+                  <span className="text-[11px] text-slate-500">Atualizar status, fornecedor e datas</span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.canDeleteSC}
+                  onChange={() => handleTogglePermission('canDeleteSC')}
+                  className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 mt-0.5"
+                />
+                <div>
+                  <span className="font-medium text-slate-900 block">Excluir solicitações</span>
+                  <span className="text-[11px] text-slate-500">Remover registros do painel</span>
+                </div>
+              </label>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={formData.permissions.canManageEquipments}
-                onChange={() => handleTogglePermission('canManageEquipments')}
-                className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500 mt-0.5"
-              />
-              <div>
-                <span className="font-semibold text-slate-900 block">Cadastrar / Editar Equipamentos</span>
-                <span className="text-[11px] text-slate-500">Permissão para adicionar, alterar ou remover máquinas no inventário</span>
-              </div>
-            </label>
+          {/* Operações de TI & Termos */}
+          <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+            <span className="text-xs font-semibold text-slate-800 block pb-1 border-b border-slate-100">
+              TI & Termos
+            </span>
 
-            <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={formData.permissions.canManageTermos}
-                onChange={() => handleTogglePermission('canManageTermos')}
-                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 mt-0.5"
-              />
-              <div>
-                <span className="font-semibold text-purple-900 block">Emitir e Alterar Termos de Responsabilidade</span>
-                <span className="text-[11px] text-slate-500">Pode gerar novos termos, alterar dados e registrar devoluções</span>
-              </div>
-            </label>
-          </div>
-        </div>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.canManageEquipments}
+                  onChange={() => handleTogglePermission('canManageEquipments')}
+                  className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 mt-0.5"
+                />
+                <div>
+                  <span className="font-medium text-slate-900 block">Gerenciar equipamentos</span>
+                  <span className="text-[11px] text-slate-500">Cadastrar, alterar e remover ativos de TI</span>
+                </div>
+              </label>
 
-        {/* Bloco Operações de Compras (SC) */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 pb-1 border-b border-slate-200">
-            <ShoppingCart className="w-3.5 h-3.5 text-orange-600" />
-            <span>Operações em Compras (SC)</span>
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={formData.permissions.canCreateSC}
-                onChange={() => handleTogglePermission('canCreateSC')}
-                className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 mt-0.5"
-              />
-              <div>
-                <span className="font-semibold text-slate-900 block">Criar Novas Solicitações</span>
-                <span className="text-[11px] text-slate-500">Cadastrar novos pedidos de compra no painel</span>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={formData.permissions.canEditSC}
-                onChange={() => handleTogglePermission('canEditSC')}
-                className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 mt-0.5"
-              />
-              <div>
-                <span className="font-semibold text-slate-900 block">Editar Dados e Prazos</span>
-                <span className="text-[11px] text-slate-500">Atualizar status, fornecedor, prazos e observações</span>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={formData.permissions.canDeleteSC}
-                onChange={() => handleTogglePermission('canDeleteSC')}
-                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 mt-0.5"
-              />
-              <div>
-                <span className="font-semibold text-rose-700 block">Excluir Solicitações</span>
-                <span className="text-[11px] text-slate-500">Permite apagar registros de solicitações de compra</span>
-              </div>
-            </label>
+              <label className="flex items-start gap-2 text-xs text-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.canManageTermos}
+                  onChange={() => handleTogglePermission('canManageTermos')}
+                  className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 mt-0.5"
+                />
+                <div>
+                  <span className="font-medium text-slate-900 block">Emitir termos de responsabilidade</span>
+                  <span className="text-[11px] text-slate-500">Gerar novos termos e registrar devoluções</span>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 
         {/* Bloco Administrativo & Relatórios */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 md:col-span-2">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 pb-1 border-b border-slate-200">
-            <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Administração, Relatórios e Dados Globais</span>
-          </div>
+        <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+          <span className="text-xs font-semibold text-slate-800 block pb-1 border-b border-slate-100">
+            Administração e Relatórios
+          </span>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
@@ -664,9 +648,9 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 type="checkbox"
                 checked={formData.permissions.canAccessAnalytics}
                 onChange={() => handleTogglePermission('canAccessAnalytics')}
-                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900"
               />
-              <span>Indicadores & Gráficos</span>
+              <span>Gráficos & Indicadores</span>
             </label>
 
             <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
@@ -674,7 +658,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 type="checkbox"
                 checked={formData.permissions.canAccessAdmin}
                 onChange={() => handleTogglePermission('canAccessAdmin')}
-                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900"
               />
               <span>Painel Administrativo</span>
             </label>
@@ -684,9 +668,9 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 type="checkbox"
                 checked={formData.permissions.canManageUsers}
                 onChange={() => handleTogglePermission('canManageUsers')}
-                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900"
               />
-              <span className="font-semibold text-indigo-900">Gestão de Usuários</span>
+              <span className="font-medium text-slate-900">Gestão de Usuários</span>
             </label>
 
             <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer select-none">
@@ -694,7 +678,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 type="checkbox"
                 checked={formData.permissions.canExportReports}
                 onChange={() => handleTogglePermission('canExportReports')}
-                className="w-4 h-4 rounded text-slate-700 focus:ring-slate-700"
+                className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900"
               />
               <span>Exportar Dados</span>
             </label>
@@ -711,64 +695,46 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
       <div className="space-y-3">
         {/* Quick Presence Filters */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-lg w-fit border border-slate-200/80">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg w-fit border border-slate-200">
             <button
               type="button"
               onClick={() => setPresenceFilter('all')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                 presenceFilter === 'all'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <span>Todos</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
-                {safeUsers.length}
-              </span>
+              <span className="text-slate-400">({safeUsers.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setPresenceFilter('online')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                 presenceFilter === 'online'
-                  ? 'bg-emerald-500 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
+                  ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white/60 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span>Online</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                  presenceFilter === 'online'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-emerald-100 text-emerald-800'
-                }`}
-              >
-                {onlineCount}
-              </span>
+              <span className="text-slate-400">({onlineCount})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setPresenceFilter('offline')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                 presenceFilter === 'offline'
-                  ? 'bg-rose-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-rose-700 hover:bg-rose-50'
+                  ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-rose-400 ring-2 ring-white/60" />
+              <span className="w-2 h-2 rounded-full bg-slate-400" />
               <span>Offline</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                  presenceFilter === 'offline'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-rose-100 text-rose-800'
-                }`}
-              >
-                {offlineCount}
-              </span>
+              <span className="text-slate-400">({offlineCount})</span>
             </button>
           </div>
 
@@ -778,7 +744,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
               <button
                 type="button"
                 onClick={() => setPresenceFilter('all')}
-                className="text-orange-600 hover:underline font-medium cursor-pointer text-[11px]"
+                className="text-slate-600 hover:text-slate-900 underline font-medium cursor-pointer text-xs"
               >
                 (Mostrar todos)
               </button>
@@ -792,7 +758,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Buscar colaborador, cargo, e-mail ou setor..."
+                placeholder="Buscar colaborador, e-mail ou setor..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
@@ -875,189 +841,132 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
             {filteredUsers.map((user) => {
               const isMe = currentUser.id === user.id;
               const hasPassword = Boolean(user.password && user.password.trim().length > 0);
-              const cargo = getUserCargo(user);
-              const badge = getRoleBadgeClass(cargo);
               const perms = getUserPermissions(user);
               const activity = getUserActivityInfo(user, currentUser);
               const isOnline = isUserOnline(user, currentUser);
 
+              // Módulos com acesso formatados de forma limpa e objetiva
+              const modulesList: string[] = [];
+              if (perms.canAccessSC) modulesList.push('Compras (SC)');
+              if (perms.canAccessInventario) modulesList.push('Inventário TI');
+              if (perms.canAccessTermos) modulesList.push('Termos TI');
+              if (perms.canAccessAnalytics) modulesList.push('Gráficos');
+
               return (
                 <div
                   key={user.id}
-                  className={`border rounded-xl bg-white transition-all shadow-2xs hover:shadow-md flex flex-col justify-between overflow-hidden ${
-                    isMe ? 'border-amber-300 ring-2 ring-amber-100' : 'border-slate-200'
-                  }`}
+                  className="border border-slate-200 rounded-lg bg-white shadow-2xs hover:border-slate-300 flex flex-col justify-between overflow-hidden transition-colors"
                 >
                   {/* Card Content */}
                   <div className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-10 h-10 rounded-xl ${
-                            user.avatarColor || 'bg-slate-700'
-                          } text-white flex items-center justify-center font-bold text-sm shrink-0 relative shadow-2xs`}
-                        >
-                          {user.nome.charAt(0).toUpperCase()}
-                          <UserPresenceBadge
-                            user={user}
-                            currentUser={currentUser}
-                            size="sm"
-                            className="absolute -bottom-0.5 -right-0.5"
-                          />
+                        <div className="w-9 h-9 rounded-md bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                          {(user?.nome || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 truncate">
-                            <span className="truncate">{user.nome}</span>
+                          <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5 truncate">
+                            <span className="truncate">{user?.nome || 'Usuário'}</span>
                             {isMe && (
-                              <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                              <span className="px-1.5 py-0.2 text-[10px] font-medium rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
                                 Você
                               </span>
                             )}
                           </div>
-                          <div className="text-slate-500 text-xs flex items-center gap-1 truncate mt-0.5">
-                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{user.email}</span>
+                          <div className="text-slate-500 text-xs truncate">
+                            {user.email}
                           </div>
                         </div>
                       </div>
 
-                      {/* Online status indicator pill */}
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                          isOnline
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-slate-100 text-slate-500 border border-slate-200'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                      {/* Online/Offline simples */}
+                      <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
+                        <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                         {isOnline ? 'Online' : 'Offline'}
                       </span>
                     </div>
 
-                    {/* Cargo e Setor */}
-                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${badge.bg} ${badge.text} ${badge.border}`}>
-                        {cargo}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
-                        <Building className="w-3 h-3 text-slate-400" />
-                        <span className="truncate max-w-[140px]">{user.departamento || 'Geral'}</span>
-                      </span>
+                    {/* Setor */}
+                    <div className="text-xs text-slate-600 flex items-center gap-2">
+                      <span>Setor: <strong className="font-medium text-slate-800">{user.departamento || 'Geral'}</strong></span>
+                      {user.role === 'admin' && (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                          Admin
+                        </span>
+                      )}
                     </div>
 
-                    {/* Módulos & Acessos do Usuário */}
-                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                        Módulos com Acesso:
+                    {/* Módulos com Acesso */}
+                    <div className="pt-2 border-t border-slate-100 space-y-1">
+                      <span className="text-[11px] text-slate-400 block">
+                        Acesso aos módulos:
                       </span>
-                      <div className="flex items-center gap-1.5 flex-wrap min-h-[26px]">
+                      <div className="flex items-center gap-1.5 flex-wrap min-h-[24px]">
                         {perms.canAccessAdmin && perms.canManageUsers ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <Shield className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span>Acesso Total (Administrador)</span>
+                          <span className="text-xs font-medium text-slate-800">
+                            Acesso Total (Administrador)
                           </span>
+                        ) : modulesList.length > 0 ? (
+                          modulesList.map((mod) => (
+                            <span
+                              key={mod}
+                              className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200"
+                            >
+                              {mod}
+                            </span>
+                          ))
                         ) : (
-                          <>
-                            {perms.canAccessSC && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200"
-                                title="Acesso a Solicitações de Compra"
-                              >
-                                <ShoppingCart className="w-3 h-3 text-orange-500" />
-                                <span>Compras (SC)</span>
-                              </span>
-                            )}
-                            {perms.canAccessInventario && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200"
-                                title="Acesso ao Inventário de TI"
-                              >
-                                <Boxes className="w-3 h-3 text-cyan-600" />
-                                <span>Inventário TI</span>
-                              </span>
-                            )}
-                            {perms.canAccessTermos && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200"
-                                title="Acesso aos Termos de Responsabilidade"
-                              >
-                                <FileCheck className="w-3 h-3 text-purple-600" />
-                                <span>Termos TI</span>
-                              </span>
-                            )}
-                            {perms.canAccessAnalytics && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200"
-                                title="Acesso aos Gráficos"
-                              >
-                                <BarChart2 className="w-3 h-3 text-blue-500" />
-                                <span>Gráficos</span>
-                              </span>
-                            )}
-                            {!perms.canAccessSC && !perms.canAccessInventario && !perms.canAccessTermos && !perms.canAccessAnalytics && (
-                              <span className="text-slate-400 text-xs italic">
-                                Sem módulos liberados
-                              </span>
-                            )}
-                          </>
+                          <span className="text-xs text-slate-400 italic">
+                            Nenhum módulo liberado
+                          </span>
                         )}
                       </div>
                     </div>
 
                     {/* Senha e Última Atividade */}
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                      <span className="flex items-center gap-1">
-                        {hasPassword ? (
-                          <span className="text-emerald-700 font-medium flex items-center gap-1">
-                            <Lock className="w-3 h-3 text-emerald-600" />
-                            Com Senha
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <Unlock className="w-3 h-3" />
-                            Sem Senha
-                          </span>
-                        )}
-                      </span>
-                      <span className="truncate" title={activity.tooltipText}>
-                        {isOnline ? 'Ativo agora' : (user.lastSeen ? activity.relativeTime : 'Nunca logou')}
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+                      <span>{hasPassword ? 'Com senha' : 'Sem senha'}</span>
+                      <span>
+                        {isOnline ? 'Ativo agora' : (user.lastSeen ? activity.relativeTime : 'Offline')}
                       </span>
                     </div>
                   </div>
 
-                  {/* Card Actions Footer - BOTÕES DIRETOS SEM ROLAR */}
-                  <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                  {/* Ações do Card */}
+                  <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(user)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition-colors cursor-pointer"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Editar Permissões</span>
+                      <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Editar</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPasswordModalUser(user);
-                        setNewPassword(user.password || '');
-                      }}
-                      title="Definir Senha de Acesso"
-                      className="p-1.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-200/70 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <KeyRound className="w-4 h-4" />
-                    </button>
-
-                    {!isMe && (
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setUserToDelete(user)}
-                        title="Excluir Usuário"
-                        className="p-1.5 text-rose-600 hover:text-rose-700 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-colors cursor-pointer"
+                        onClick={() => {
+                          setPasswordModalUser(user);
+                          setNewPassword(user.password || '');
+                        }}
+                        title="Definir senha de acesso"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-white rounded-md transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <KeyRound className="w-4 h-4" />
                       </button>
-                    )}
+
+                      {!isMe && (
+                        <button
+                          type="button"
+                          onClick={() => setUserToDelete(user)}
+                          title="Excluir usuário"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1072,7 +981,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px] tracking-wider whitespace-nowrap">
                 <th className="py-3 px-3.5 min-w-[200px]">Colaborador</th>
-                <th className="py-3 px-3 min-w-[150px]">Cargo / Setor</th>
+                <th className="py-3 px-3 min-w-[150px]">Setor</th>
                 <th className="py-3 px-3 min-w-[220px]">Permissões de Acesso</th>
                 <th className="py-3 px-3 min-w-[90px]">Autenticação</th>
                 <th className="py-3 px-3 text-right min-w-[140px] sticky right-0 bg-slate-50 z-20 shadow-[-6px_0_10px_rgba(0,0,0,0.04)] border-l border-slate-200">
@@ -1091,158 +1000,86 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 filteredUsers.map((user) => {
                   const isMe = currentUser.id === user.id;
                   const hasPassword = Boolean(user.password && user.password.trim().length > 0);
-                  const cargo = getUserCargo(user);
-                  const badge = getRoleBadgeClass(cargo);
+                  const isOnline = isUserOnline(user, currentUser);
                   const perms = getUserPermissions(user);
 
                   return (
                     <tr
                       key={user.id}
                       onClick={() => handleOpenEdit(user)}
-                      className={`group hover:bg-slate-50/90 transition-colors cursor-pointer ${
-                        isMe ? 'bg-amber-50/20' : ''
-                      }`}
+                      className="group hover:bg-slate-50/90 transition-colors cursor-pointer"
                       title="Clique para editar este colaborador"
                     >
                       {/* Name & Email */}
                       <td className="py-3 px-3.5 align-middle">
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-md ${
-                              user.avatarColor || 'bg-slate-700'
-                            } text-white flex items-center justify-center font-semibold text-xs shrink-0 relative`}
-                          >
-                            {user.nome.charAt(0).toUpperCase()}
-                            <UserPresenceBadge
-                              user={user}
-                              currentUser={currentUser}
-                              size="xs"
-                              className="absolute -bottom-0.5 -right-0.5"
-                            />
+                          <div className="w-8 h-8 rounded-md bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                            {(user?.nome || 'U').charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <div className="font-semibold text-slate-900 flex items-center gap-1.5 truncate">
-                              <span className="truncate">{user.nome}</span>
-                              <UserPresenceBadge
-                                user={user}
-                                currentUser={currentUser}
-                                showText={true}
-                                size="xs"
-                              />
+                              <span className="truncate">{user?.nome || 'Usuário'}</span>
+                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 shrink-0 font-normal">
+                                <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                {isOnline ? 'Online' : 'Offline'}
+                              </span>
                               {isMe && (
-                                <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                                <span className="px-1.5 py-0.2 text-[10px] font-medium rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
                                   Você
                                 </span>
                               )}
                             </div>
-                            <div className="text-slate-500 text-[11px] flex items-center gap-2 mt-0.5 truncate">
-                              <span className="truncate flex items-center gap-1">
-                                <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span className="truncate">{user.email}</span>
-                              </span>
+                            <div className="text-slate-500 text-xs flex items-center gap-2 mt-0.5 truncate">
+                              <span className="truncate">{user.email}</span>
                               <span className="text-slate-300">•</span>
-                              <span
-                                className="text-[10px] text-slate-400 flex items-center gap-1 cursor-help shrink-0"
-                                title={getUserActivityInfo(user, currentUser).tooltipText}
-                              >
-                                <Clock className="w-2.5 h-2.5 text-slate-400" />
-                                {isUserOnline(user, currentUser) ? (
-                                  <span className="text-emerald-600 font-medium">Ativo agora</span>
-                                ) : (
-                                  <span>
-                                    {user.lastSeen
-                                      ? `Última atividade: ${getUserActivityInfo(user, currentUser).relativeTime}`
-                                      : 'Sem registro recente'}
-                                  </span>
-                                )}
+                              <span className="text-[11px] text-slate-400 shrink-0">
+                                {isUserOnline(user, currentUser) ? 'Ativo agora' : (user.lastSeen ? getUserActivityInfo(user, currentUser).relativeTime : 'Offline')}
                               </span>
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Cargo & Setor Unificados */}
+                      {/* Setor */}
                       <td className="py-3 px-3 whitespace-nowrap align-middle">
-                        <div className="flex flex-col gap-1 items-start">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border ${badge.bg} ${badge.text} ${badge.border}`}
-                          >
-                            {cargo}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-slate-700 font-medium">
+                            {user.departamento || 'Geral'}
                           </span>
-                          <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                            <Building className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate max-w-[150px]">{user.departamento || 'Geral'}</span>
-                          </span>
+                          {user.role === 'admin' && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                              Admin
+                            </span>
+                          )}
                         </div>
                       </td>
 
                       {/* Permissions Badges */}
                       <td className="py-3 px-3 align-middle">
                         {perms.canAccessAdmin && perms.canManageUsers ? (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80 whitespace-nowrap">
-                            <Shield className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span>Acesso Total (Administrador)</span>
-                          </div>
+                          <span className="text-xs font-medium text-slate-800">
+                            Acesso Total (Administrador)
+                          </span>
                         ) : (
                           <div className="flex items-center gap-1.5 flex-wrap py-0.5">
                             {perms.canAccessSC && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-orange-50 text-orange-700 border border-orange-200/80 whitespace-nowrap shrink-0"
-                                title="Acesso ao Painel de Solicitações de Compra"
-                              >
-                                <ShoppingCart className="w-3 h-3 text-orange-500 shrink-0" />
-                                <span>SC</span>
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap shrink-0">
+                                Compras (SC)
                               </span>
                             )}
                             {perms.canAccessInventario && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-50 text-cyan-700 border border-cyan-200/80 whitespace-nowrap shrink-0"
-                                title="Acesso ao Inventário de TI e Ativos"
-                              >
-                                <Boxes className="w-3 h-3 text-cyan-600 shrink-0" />
-                                <span>Inventário</span>
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap shrink-0">
+                                Inventário TI
                               </span>
                             )}
                             {perms.canAccessTermos && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/80 whitespace-nowrap shrink-0"
-                                title="Acesso aos Termos de Responsabilidade"
-                              >
-                                <FileCheck className="w-3 h-3 text-purple-600 shrink-0" />
-                                <span>Termos</span>
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap shrink-0">
+                                Termos TI
                               </span>
                             )}
                             {perms.canAccessAnalytics && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/80 whitespace-nowrap shrink-0"
-                                title="Acesso a Gráficos e Indicadores"
-                              >
-                                <BarChart2 className="w-3 h-3 text-blue-500 shrink-0" />
-                                <span>Gráficos</span>
-                              </span>
-                            )}
-                            {perms.canDeleteSC && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/80 whitespace-nowrap shrink-0"
-                                title="Permissão para Excluir Solicitações de Compra"
-                              >
-                                <span>Excluir SC</span>
-                              </span>
-                            )}
-                            {perms.canManageEquipments && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-teal-50 text-teal-700 border border-teal-200/80 whitespace-nowrap shrink-0"
-                                title="Permissão para Gerenciar Equipamentos de TI"
-                              >
-                                <span>Ativos TI</span>
-                              </span>
-                            )}
-                            {perms.canManageTermos && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200/80 whitespace-nowrap shrink-0"
-                                title="Permissão para Emitir e Gerenciar Termos"
-                              >
-                                <span>Emitir Termos</span>
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap shrink-0">
+                                Gráficos
                               </span>
                             )}
                             {!perms.canAccessSC && !perms.canAccessInventario && !perms.canAccessTermos && !perms.canAccessAnalytics && (
@@ -1256,32 +1093,24 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
 
                       {/* Password Status */}
                       <td className="py-3 px-3 whitespace-nowrap align-middle">
-                        {hasPassword ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-                            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Com Senha</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                            <Unlock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Sem Senha</span>
-                          </span>
-                        )}
+                        <span className="text-xs text-slate-600">
+                          {hasPassword ? 'Com Senha' : 'Sem Senha'}
+                        </span>
                       </td>
 
-                      {/* Actions (Fixado à Direita, Sempre Visível sem Rolar) */}
+                      {/* Actions */}
                       <td className="py-3 px-3 text-right whitespace-nowrap align-middle sticky right-0 bg-white/95 group-hover:bg-slate-50/95 z-10 shadow-[-6px_0_10px_rgba(0,0,0,0.04)] border-l border-slate-100">
-                        <div className="inline-flex items-center justify-end gap-1.5">
+                        <div className="inline-flex items-center justify-end gap-1">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenEdit(user);
                             }}
-                            title="Editar Dados, Cargo e Permissões"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer"
+                            title="Editar"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition-colors cursor-pointer"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5 text-slate-500" />
                             <span>Editar</span>
                           </button>
                           <button
@@ -1292,7 +1121,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                               setNewPassword(user.password || '');
                             }}
                             title="Definir Senha de Acesso"
-                            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 rounded-md transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
                           >
                             <KeyRound className="w-3.5 h-3.5" />
                           </button>
@@ -1304,7 +1133,7 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                                 setUserToDelete(user);
                               }}
                               title="Excluir Usuário"
-                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1326,13 +1155,6 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
         </div>
       </div>
       )}
-
-      {/* Datalist com sugestões rápidas de cargo */}
-      <datalist id="cargo-suggestions">
-        {cargoSuggestions.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
 
       {/* Modal: Add User */}
       {isAddModalOpen && (
@@ -1386,33 +1208,23 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Cargo / Função na Empresa
+                    Departamento / Setor *
                   </label>
-                  <input
-                    type="text"
-                    list="cargo-suggestions"
-                    placeholder="Ex: Comprador Sênior, Almoxarife, Analista de TI..."
-                    value={formData.cargo}
-                    onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                      <Building className="w-3.5 h-3.5" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: TI, Suprimentos, Obras, Logística, Diretoria..."
+                      value={formData.departamento}
+                      onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
+                      className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Departamento / Setor
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Suprimentos, Logística, TI, Obras..."
-                    value={formData.departamento}
-                    onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Senha Inicial de Acesso (Opcional)
@@ -1425,25 +1237,26 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                    Cor do Avatar
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {colors.map((c) => (
-                      <button
-                        key={c.class}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, avatarColor: c.class })}
-                        className={`w-6 h-6 rounded-md ${c.class} text-white flex items-center justify-center cursor-pointer transition-transform ${
-                          formData.avatarColor === c.class ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'opacity-80'
-                        }`}
-                      >
-                        {formData.avatarColor === c.class && <Check className="w-3 h-3" />}
-                      </button>
-                    ))}
-                  </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Cor do Avatar
+                </label>
+                <div className="flex items-center gap-2">
+                  {colors.map((c) => (
+                    <button
+                      key={c.class}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, avatarColor: c.class })}
+                      className={`w-7 h-7 rounded-md ${c.class} text-white flex items-center justify-center cursor-pointer transition-transform ${
+                        formData.avatarColor === c.class ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'opacity-80 hover:opacity-100'
+                      }`}
+                      title={c.label}
+                    >
+                      {formData.avatarColor === c.class && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1518,51 +1331,45 @@ export const UserManagementTab: React.FC<UserManagementTabProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Cargo / Função na Empresa
+                    Departamento / Setor *
                   </label>
-                  <input
-                    type="text"
-                    list="cargo-suggestions"
-                    placeholder="Ex: Comprador, Almoxarife, Analista de TI..."
-                    value={formData.cargo}
-                    onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                      <Building className="w-3.5 h-3.5" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: TI, Suprimentos, Obras, Logística, Diretoria..."
+                      value={formData.departamento}
+                      onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
+                      className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Departamento / Setor
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                    Cor do Avatar
                   </label>
-                  <input
-                    type="text"
-                    value={formData.departamento}
-                    onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  Cor do Avatar
-                </label>
-                <div className="flex items-center gap-2">
-                  {colors.map((c) => (
-                    <button
-                      key={c.class}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, avatarColor: c.class })}
-                      className={`w-6 h-6 rounded-md ${c.class} text-white flex items-center justify-center cursor-pointer transition-transform ${
-                        formData.avatarColor === c.class ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'opacity-80'
-                      }`}
-                    >
-                      {formData.avatarColor === c.class && <Check className="w-3 h-3" />}
-                    </button>
-                  ))}
+                  <div className="flex items-center gap-2">
+                    {colors.map((c) => (
+                      <button
+                        key={c.class}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, avatarColor: c.class })}
+                        className={`w-7 h-7 rounded-md ${c.class} text-white flex items-center justify-center cursor-pointer transition-transform ${
+                          formData.avatarColor === c.class ? 'ring-2 ring-offset-1 ring-slate-900 scale-105' : 'opacity-80 hover:opacity-100'
+                        }`}
+                        title={c.label}
+                      >
+                        {formData.avatarColor === c.class && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

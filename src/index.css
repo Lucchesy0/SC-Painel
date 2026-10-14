@@ -3,13 +3,26 @@
 
 @layer base {
   :root {
-    --primary-orange: #FF5500;
-    --primary-orange-hover: #E04A00;
+    --primary-orange: #EA580C;
+    --primary-orange-hover: #C2410C;
     color-scheme: light;
   }
   
   html.dark {
     color-scheme: dark;
+  }
+
+  /* Cantos quadrados e precisão visual corporativa em toda a aplicação */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0 !important;
+  }
+
+  /* Exceção discreta apenas para pequenos pontos de status online/offline */
+  .presence-dot,
+  .status-dot {
+    border-radius: 9999px !important;
   }
 
   /* Renderização nativa 100% com densidade calibrada via tokens de espaçamento */
@@ -47,7 +60,7 @@
   }
 
   body {
-    @apply bg-[#eff1f4] text-slate-800 transition-colors duration-200 dark:bg-[#202532] dark:text-slate-100 overflow-x-hidden;
+    @apply bg-[#f1f5f9] text-slate-800 transition-colors duration-150 dark:bg-[#1e293b] dark:text-slate-100 overflow-x-hidden;
     touch-action: pan-x pan-y;
   }
 
@@ -66,14 +79,14 @@
   .dark input,
   .dark select,
   .dark textarea {
-    @apply dark:bg-[#2c3343] dark:border-slate-500/50 dark:text-slate-100 dark:placeholder-slate-400 focus:dark:border-orange-400 focus:dark:ring-2 focus:dark:ring-orange-500/25 focus:dark:bg-[#323a4c] transition-all;
+    @apply dark:bg-[#2c3343] dark:border-slate-500/50 dark:text-slate-100 dark:placeholder-slate-400 focus:dark:border-orange-500 focus:dark:ring-1 focus:dark:ring-orange-500 focus:dark:bg-[#323a4c] transition-all;
   }
 }
 
-/* Custom Scrollbars - Softened & Illuminated */
+/* Custom Scrollbars - Retangulares, minimalistas e profissionais */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -82,7 +95,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 9999px;
+  border-radius: 0 !important;
 }
 
 .dark ::-webkit-scrollbar-thumb {
@@ -97,22 +110,22 @@
   background: #64748b;
 }
 
-/* Primary Button Styling Utility */
+/* Primary Button Styling Utility - Cores Corporativas */
 .btn-mcm {
-  background-color: #FF5500;
+  background-color: #EA580C;
   color: #ffffff;
   transition: all 0.15s ease-in-out;
 }
 
 .btn-mcm:hover {
-  background-color: #E04A00;
+  background-color: #C2410C;
 }
 
-/* Animations */
+/* Animations discretas e sóbrias */
 @keyframes fadeInRow {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -121,22 +134,22 @@
 }
 
 .animate-fade-in-row {
-  animation: fadeInRow 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInRow 0.2s ease-out forwards;
 }
 
 @keyframes fadeInCard {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 .animate-fade-in-card {
-  animation: fadeInCard 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInCard 0.2s ease-out forwards;
 }
 
 /* Hide scrollbar for smooth horizontal nav on touch devices */
@@ -211,6 +224,167 @@
 
 .animate-ring-expand {
   animation: ringExpand 0.6s ease-out forwards;
+}
+
+/* =========================================================
+   REGRAS DE IMPRESSÃO / SALVAMENTO EM PDF (1 FOLHA A4)
+   ========================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Oculta todos os componentes globais ao imprimir (Header, Drawer, Toasts, Bottom Nav, etc.) */
+  header,
+  nav,
+  aside,
+  footer,
+  [role="banner"],
+  [role="navigation"],
+  [id^="toast-"],
+  .print-hide,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Quando o modal de impressão do Termo estiver ativo, isola estritamente o Termo em 1 página A4 */
+  html.printing-term-active,
+  body.printing-term-active {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  /* Oculta 100% da aplicação base (#root) ao imprimir o Termo */
+  body.printing-term-active #root {
+    display: none !important;
+  }
+
+  body.printing-term-active #printable-term-modal {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: auto !important;
+  }
+
+  body.printing-term-active #printable-term-modal .printable-modal-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-term-active #printable-term-modal .printable-outer-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    display: block !important;
+  }
+
+  /* Folha física A4 - Preenche pelo menos 90% da altura da folha (270mm de 297mm) */
+  body.printing-term-active #printable-term-sheet {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 270mm !important;
+    min-height: 268mm !important;
+    max-height: 272mm !important;
+    margin: 0 auto !important;
+    padding: 10mm 12mm !important;
+    border: 2px solid #0f172a !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    overflow: hidden !important;
+  }
+
+  /* Evita quebras ou divisões de elementos internos da folha */
+  body.printing-term-active #printable-term-sheet * {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Formatação consistente e espaçada de tabelas na folha impressa */
+  body.printing-term-active #printable-term-sheet table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
+  }
+
+  body.printing-term-active #printable-term-sheet th {
+    border: 1px solid #0f172a !important;
+    padding: 3.5px 6px !important;
+    vertical-align: middle !important;
+    font-size: 11px !important;
+  }
+
+  body.printing-term-active #printable-term-sheet td {
+    border: 1px solid #0f172a !important;
+    padding: 3.5px 6px !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: 11px !important;
+  }
+
+  /* Tipografia ajustada para preenchimento harmônico */
+  body.printing-term-active #printable-term-sheet p {
+    margin-top: 0 !important;
+    margin-bottom: 3px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Logotipo na folha de impressão */
+  body.printing-term-active #printable-term-sheet img {
+    height: 38px !important;
+    max-height: 40px !important;
+    width: auto !important;
+    max-width: 165px !important;
+    object-fit: contain !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 

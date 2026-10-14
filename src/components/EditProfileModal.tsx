@@ -120,7 +120,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               <div
                 className={`w-10 h-10 rounded-xl ${avatarColor} text-white flex items-center justify-center font-black text-base shadow-xs`}
               >
-                {nome ? nome.charAt(0).toUpperCase() : user.nome.charAt(0)}
+                {nome ? nome.charAt(0).toUpperCase() : (user?.nome ? user.nome.charAt(0).toUpperCase() : 'U')}
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -189,7 +189,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   type="text"
                   value={departamento}
                   onChange={(e) => setDepartamento(e.target.value)}
-                  placeholder="Ex: Suprimentos, TI, Almoxarifado, Engenharia"
+                  placeholder="Ex: Suprimentos, TI, Logística, Engenharia, Obras"
                   className="w-full h-10 pl-9 pr-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
                 />
               </div>

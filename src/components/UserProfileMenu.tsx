@@ -69,7 +69,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   }, [isOpen]);
 
   const perms = getUserPermissions(currentUser);
-  const userCargo = getUserCargo(currentUser);
+  const userSetor = currentUser.departamento || (currentUser.role === 'admin' ? 'Administrador' : 'Colaborador');
 
   return (
     <div className="relative shrink-0" ref={menuRef}>
@@ -84,17 +84,19 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="true"
         aria-label="Menu do perfil do usuário"
-        title={`Perfil: ${currentUser.nome} (${userCargo})`}
+        title={`Perfil: ${currentUser.nome} (${userSetor})`}
         className="flex items-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-1.5 sm:px-2.5 rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/90 dark:bg-[#1a202c] hover:bg-slate-100 dark:hover:bg-[#222938] hover:border-slate-300 dark:hover:border-slate-600 transition-colors cursor-pointer text-left group shadow-xs active:scale-95 shrink-0"
       >
-        <div
-          className={`w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-lg ${
-            currentUser.avatarColor || 'bg-slate-700'
-          } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
-        >
-          {currentUser.nome.charAt(0).toUpperCase()}
+        <div className="relative shrink-0 flex items-center justify-center">
+          <div
+            className={`w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-lg ${
+              currentUser?.avatarColor || 'bg-slate-700'
+            } text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}
+          >
+            {(currentUser?.nome || 'U').charAt(0).toUpperCase()}
+          </div>
           <span
-            className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+            className={`absolute -bottom-0.5 -right-0.5 translate-x-1/4 translate-y-1/4 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${
               cloudStatus === 'connected'
                 ? 'bg-emerald-500'
                 : cloudStatus === 'syncing'
@@ -107,10 +109,10 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
 
         <div className="hidden md:flex flex-col text-left leading-tight max-w-[130px]">
           <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-            {currentUser.nome}
+            {currentUser?.nome || 'Usuário'}
           </span>
           <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-            {userCargo}
+            {userSetor}
           </span>
         </div>
 
@@ -148,14 +150,16 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
             {/* Header Info */}
             <div className="p-3 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2.5">
-                <div
-                  className={`w-9 h-9 rounded-lg ${
-                    currentUser.avatarColor || 'bg-slate-700'
-                  } text-white flex items-center justify-center font-bold text-sm shrink-0 relative`}
-                >
-                  {currentUser.nome.charAt(0).toUpperCase()}
+                <div className="relative shrink-0 flex items-center justify-center">
+                  <div
+                    className={`w-9 h-9 rounded-lg ${
+                      currentUser?.avatarColor || 'bg-slate-700'
+                    } text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs`}
+                  >
+                    {(currentUser?.nome || 'U').charAt(0).toUpperCase()}
+                  </div>
                   <span
-                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                    className={`absolute -bottom-0.5 -right-0.5 translate-x-1/4 translate-y-1/4 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
                       cloudStatus === 'connected'
                         ? 'bg-emerald-500'
                         : cloudStatus === 'syncing'
@@ -167,7 +171,7 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-slate-900 truncate">
-                    {currentUser.nome}
+                    {currentUser?.nome || 'Usuário'}
                   </p>
                   <p className="text-[11px] text-slate-500 truncate">
                     {currentUser.email || 'Sem e-mail cadastrado'}
@@ -177,13 +181,13 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
 
               {/* Badges & Sync Line */}
               <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5">
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200/70 text-slate-700">
-                    {userCargo}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                    {userSetor}
                   </span>
-                  {currentUser.departamento && (
-                    <span className="text-[10px] text-slate-400 truncate max-w-[90px]">
-                      {currentUser.departamento}
+                  {currentUser.role === 'admin' && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      Admin
                     </span>
                   )}
                 </div>

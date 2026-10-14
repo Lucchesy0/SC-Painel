@@ -5,14 +5,19 @@
 export const formatDateBR = (dateStr?: string | null): string => {
   if (!dateStr) return '-';
   try {
-    // If format is already YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [year, month, day] = dateStr.split('-');
+    const trimmed = String(dateStr).trim();
+    // If format is already DD/MM/YYYY
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+      return trimmed;
+    }
+    // If format starts with YYYY-MM-DD (e.g. 2026-09-23 or 2026-09-23T...)
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      const [year, month, day] = trimmed.slice(0, 10).split('-');
       return `${day}/${month}/${year}`;
     }
 
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return trimmed;
     return d.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',

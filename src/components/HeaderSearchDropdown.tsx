@@ -47,12 +47,19 @@ export const HeaderSearchDropdown: React.FC<HeaderSearchDropdownProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Global Keyboard Shortcuts (⌘K, Ctrl+K, Ctrl+F, '/')
+  // Global Keyboard Shortcuts (⌘K, Ctrl+K triggers CommandPalette, Ctrl+F, '/' focuses Header Search)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       const isModifier = e.metaKey || e.ctrlKey;
+
+      if (isModifier && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsOpen(false);
+        window.dispatchEvent(new CustomEvent('open-command-palette'));
+        return;
+      }
+
       const isSearchShortcut =
-        (isModifier && e.key.toLowerCase() === 'k') ||
         (isModifier && e.key.toLowerCase() === 'f') ||
         (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA');
 
@@ -177,16 +184,25 @@ export const HeaderSearchDropdown: React.FC<HeaderSearchDropdownProps> = ({
       | { type: 'sc'; item: SC; id: string }
       | { type: 'equipment'; item: Equipment; id: string }
     > = [];
+    const seenIds = new Set<string>();
 
     if (activeTab === 'all' || activeTab === 'sc') {
-      filteredSCs.slice(0, 15).forEach((sc) => {
-        list.push({ type: 'sc', item: sc, id: `sc-${sc.id}` });
+      filteredSCs.slice(0, 15).forEach((sc, idx) => {
+        const itemKey = `sc-${sc.id || idx}`;
+        if (!seenIds.has(itemKey)) {
+          seenIds.add(itemKey);
+          list.push({ type: 'sc', item: sc, id: itemKey });
+        }
       });
     }
 
     if (activeTab === 'all' || activeTab === 'inventario') {
-      filteredEquipments.slice(0, 15).forEach((eq) => {
-        list.push({ type: 'equipment', item: eq, id: `eq-${eq.id}` });
+      filteredEquipments.slice(0, 15).forEach((eq, idx) => {
+        const itemKey = `eq-${eq.id || idx}`;
+        if (!seenIds.has(itemKey)) {
+          seenIds.add(itemKey);
+          list.push({ type: 'equipment', item: eq, id: itemKey });
+        }
       });
     }
 
@@ -314,10 +330,19 @@ export const HeaderSearchDropdown: React.FC<HeaderSearchDropdownProps> = ({
             <X className="w-3.5 h-3.5" />
           </button>
         ) : (
-          <kbd className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-slate-200/75 dark:bg-slate-700/70 text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-300/70 dark:border-slate-600/60 shadow-2xs shrink-0 select-none">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+              window.dispatchEvent(new CustomEvent('open-command-palette'));
+            }}
+            title="Abrir Paleta de Comandos (Ctrl + K)"
+            className="hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-slate-200/75 dark:bg-slate-700/70 hover:bg-orange-100 hover:text-orange-600 dark:hover:bg-orange-950/40 text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-300/70 dark:border-slate-600/60 shadow-2xs shrink-0 select-none cursor-pointer transition-colors"
+          >
             <Command className="w-2.5 h-2.5 stroke-[2.5]" />
             <span>K</span>
-          </kbd>
+          </button>
         )}
       </div>
 

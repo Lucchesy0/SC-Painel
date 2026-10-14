@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Keyboard, X, Command, Plus, Search, Shield, RotateCcw, Settings as SettingsIcon } from 'lucide-react';
+import { Keyboard, X, Command, Plus, Search, Shield, RotateCcw, Settings as SettingsIcon, Sparkles } from 'lucide-react';
 
 interface KeyboardShortcutsProps {
   onOpenAdd: () => void;
@@ -15,7 +15,8 @@ export const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   const [isOpen, setIsOpen] = useState(false);
 
   const shortcuts = [
-    { key: 'Ctrl + K  ou  ⌘ + K', macKey: '⌘ + K', description: 'Abrir Busca Rápida Global (SC + Inventário)', icon: <Search className="w-4 h-4 text-orange-500" /> },
+    { key: 'Ctrl + K  ou  ⌘ + K', macKey: '⌘ + K', description: 'Abrir Paleta de Comandos / Busca Global (Ctrl + K)', icon: <Command className="w-4 h-4 text-orange-500" /> },
+    { key: 'Ctrl + V', macKey: '⌘ + V', description: 'Colar print/screenshot de SC para leitura direta com IA', icon: <Sparkles className="w-4 h-4 text-blue-500" /> },
     { key: 'Ctrl + ,', macKey: '⌘ + ,', description: 'Abrir Configurações do Sistema', icon: <SettingsIcon className="w-4 h-4 text-orange-500" /> },
     { key: 'Ctrl + N', macKey: '⌘ + N', description: 'Abrir modal de Nova Solicitação (SC)', icon: <Plus className="w-4 h-4 text-amber-500" /> },
     { key: 'Ctrl + F  ou  /', macKey: '⌘ + F  ou  /', description: 'Focar no campo de filtro da tabela', icon: <Search className="w-4 h-4 text-sky-500" /> },
@@ -42,7 +43,7 @@ export const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
               <kbd className="font-mono text-[10px] bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-900/50 font-bold text-orange-600 dark:text-orange-400 shadow-2xs">
                 Ctrl + K
               </kbd>
-              <span className="text-[11px] font-bold">Busca Global</span>
+              <span className="text-[11px] font-bold">Paleta (Ctrl+K)</span>
             </button>
           )}
 

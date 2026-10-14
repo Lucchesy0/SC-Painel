@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Search,
   Bell,
@@ -53,7 +53,6 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onLogout?: () => void;
   onOpenDrawer: () => void;
-  onOpenAdd?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -83,7 +82,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onLogout,
   onOpenDrawer,
-  onOpenAdd,
 }) => {
   const [isSCOptionsOpen, setIsSCOptionsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -127,37 +125,45 @@ export const Header: React.FC<HeaderProps> = ({
     return users.filter((u) => isUserOnline(u, currentUser)).length;
   }, [users, currentUser]);
 
-  const scSubItems = [
-    {
-      id: 'solicitacoes' as ActiveNavTab,
-      label: 'Solicitações',
-      description: 'Tabela e cartões de pedidos',
-      icon: ShoppingCart,
-      badge: scCount > 0 ? (
-        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-100 text-orange-700">
-          {scCount}
-        </span>
-      ) : null,
-    },
-    {
-      id: 'indicadores' as ActiveNavTab,
-      label: 'Indicadores',
-      description: 'Métricas, KPIs e status de entrega',
-      icon: LayoutDashboard,
-      badge: delayedCount > 0 ? (
-        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-          {delayedCount} atrasada{delayedCount > 1 ? 's' : ''}
-        </span>
-      ) : null,
-    },
-    {
-      id: 'graficos' as ActiveNavTab,
-      label: 'Gráficos',
-      description: 'Análise visual e tendências',
-      icon: BarChart3,
-      badge: null,
-    },
-  ];
+  const scSubItems = useMemo(() => {
+    const list = [
+      {
+        id: 'solicitacoes' as ActiveNavTab,
+        label: 'Solicitações',
+        description: 'Tabela e cartões de pedidos',
+        icon: ShoppingCart,
+        badge: scCount > 0 ? (
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-100 text-orange-700">
+            {scCount}
+          </span>
+        ) : null,
+      },
+    ];
+
+    if (perms.canAccessAnalytics) {
+      list.push(
+        {
+          id: 'indicadores' as ActiveNavTab,
+          label: 'Indicadores',
+          description: 'Métricas, KPIs e status de entrega',
+          icon: LayoutDashboard,
+          badge: delayedCount > 0 ? (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white">
+              {delayedCount} atrasada{delayedCount > 1 ? 's' : ''}
+            </span>
+          ) : null,
+        },
+        {
+          id: 'graficos' as ActiveNavTab,
+          label: 'Gráficos',
+          description: 'Análise visual e tendências',
+          icon: BarChart3,
+          badge: null,
+        }
+      );
+    }
+    return list;
+  }, [scCount, delayedCount, perms.canAccessAnalytics]);
 
   const inventarioSubItems = [
     {
@@ -183,9 +189,9 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       role="banner"
-      className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs py-1.5 sm:py-2 px-2.5 sm:px-4 lg:px-6 w-full max-w-full"
+      className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs py-1.5 sm:py-2 px-3 sm:px-5 lg:px-7 xl:px-8 w-full max-w-full print:hidden"
     >
-      <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-1.5 sm:gap-3 lg:gap-4">
+      <div className="w-full max-w-[2100px] mx-auto flex items-center justify-between gap-1.5 sm:gap-3 lg:gap-4">
         {/* Left: Drawer Trigger, Brand Logo & Segmented Navbar Tabs */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 shrink-0">
           {/* Hamburger Menu Trigger Button */}
@@ -221,13 +227,19 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Navegação Principal do Sistema"
               className="hidden md:flex items-center p-1 rounded-2xl bg-slate-100/90 border border-slate-200 shadow-inner shrink-0 gap-1 relative"
             >
-              {/* Solicitações Dropdown with Indicadores and Gráficos */}
-              {canAccessSC && (
+              {/* Solicitações Navigation */}
+              {canAccessSC && perms.canAccessAnalytics ? (
                 <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
                     id="navTab-solicitacoes-dropdown"
-                    onClick={() => setIsSCOptionsOpen((prev) => !prev)}
+                    onClick={() => {
+                      if (activeNavTab !== 'solicitacoes') {
+                        onNavTabChange('solicitacoes');
+                      } else {
+                        setIsSCOptionsOpen((prev) => !prev);
+                      }
+                    }}
                     aria-expanded={isSCOptionsOpen}
                     aria-haspopup="menu"
                     className={`relative z-10 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[32px] font-bold focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:outline-hidden ${
@@ -250,15 +262,32 @@ export const Header: React.FC<HeaderProps> = ({
                       </span>
                     )}
                     {delayedCount > 0 && activeNavTab === 'indicadores' && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white shadow-xs animate-pulse">
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white">
                         {delayedCount}
                       </span>
                     )}
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        isSCOptionsOpen ? 'rotate-180 text-orange-600' : 'text-slate-400'
-                      }`}
-                    />
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Abrir opções de solicitações"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsSCOptionsOpen((prev) => !prev);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          setIsSCOptionsOpen((prev) => !prev);
+                        }
+                      }}
+                      className="p-0.5 hover:bg-slate-200/60 rounded cursor-pointer"
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isSCOptionsOpen ? 'rotate-180 text-orange-600' : 'text-slate-400'
+                        }`}
+                      />
+                    </span>
                   </button>
 
                   {/* Dropdown Menu */}
@@ -327,7 +356,27 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                   </AnimatePresence>
                 </div>
-              )}
+              ) : canAccessSC && !perms.canAccessAnalytics ? (
+                /* Direto para Solicitações quando o usuário não possui permissão de Analytics */
+                <button
+                  type="button"
+                  id="navTab-solicitacoes-btn"
+                  onClick={() => onNavTabChange('solicitacoes')}
+                  className={`relative z-10 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[32px] font-bold focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:outline-hidden ${
+                    activeNavTab === 'solicitacoes'
+                      ? 'text-orange-600 font-extrabold bg-white shadow-xs border border-slate-200/90'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <ShoppingCart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeNavTab === 'solicitacoes' ? 'text-orange-600' : 'text-slate-500'}`} />
+                  <span>Solicitações</span>
+                  {scCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-500 text-white shadow-xs">
+                      {scCount}
+                    </span>
+                  )}
+                </button>
+              ) : null}
 
               {/* Inventário TI & Termos de Responsabilidade Navigation */}
               {canAccessInventario && canAccessTermos ? (
@@ -337,8 +386,11 @@ export const Header: React.FC<HeaderProps> = ({
                     type="button"
                     id="navTab-inventario-dropdown"
                     onClick={() => {
-                      setIsSCOptionsOpen(false);
-                      setIsInventarioOptionsOpen((prev) => !prev);
+                      if (activeNavTab !== 'inventario') {
+                        onNavTabChange('inventario');
+                      } else {
+                        setIsInventarioOptionsOpen((prev) => !prev);
+                      }
                     }}
                     aria-expanded={isInventarioOptionsOpen}
                     aria-haspopup="menu"
@@ -363,11 +415,28 @@ export const Header: React.FC<HeaderProps> = ({
                         {equipmentCount}
                       </span>
                     )}
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        isInventarioOptionsOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
-                      }`}
-                    />
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Abrir opções de inventário"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsInventarioOptionsOpen((prev) => !prev);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          setIsInventarioOptionsOpen((prev) => !prev);
+                        }
+                      }}
+                      className="p-0.5 hover:bg-slate-200/60 rounded cursor-pointer"
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isInventarioOptionsOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
+                        }`}
+                      />
+                    </span>
                   </button>
 
                   {/* Dropdown Menu */}
@@ -544,7 +613,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Bell className="w-3.5 h-3.5 text-slate-500 group-hover:text-orange-500 transition-colors" />
               {urgentNotificationsCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-0.5 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-2xs ring-2 ring-white animate-bounce">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center bg-red-600 text-[9px] font-bold text-white">
                   {urgentNotificationsCount > 99 ? '99+' : urgentNotificationsCount}
                 </span>
               )}
@@ -567,7 +636,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Subtle Real-Time Sync Progress Bar along header bottom edge */}
+      {/* Real-Time Sync Progress Bar along header bottom edge */}
       <AnimatePresence>
         {cloudStatus === 'syncing' && (
           <motion.div
@@ -575,7 +644,7 @@ export const Header: React.FC<HeaderProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-orange-100/70 dark:bg-orange-950/40 overflow-hidden pointer-events-none z-40"
+            className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-200 dark:bg-slate-700 overflow-hidden pointer-events-none z-40"
           >
             <motion.div
               initial={{ x: '-100%' }}
@@ -585,7 +654,7 @@ export const Header: React.FC<HeaderProps> = ({
                 duration: 1.25,
                 ease: 'easeInOut',
               }}
-              className="h-full w-1/2 bg-gradient-to-r from-orange-400 via-amber-400 to-orange-600 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.8)]"
+              className="h-full w-1/3 bg-orange-600"
             />
           </motion.div>
         )}

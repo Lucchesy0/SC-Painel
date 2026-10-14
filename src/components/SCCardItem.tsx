@@ -20,6 +20,8 @@ import { triggerCompletionFeedback, triggerHaptic } from '../utils/haptics';
 interface SCCardItemProps {
   sc: SC;
   permissions?: RolePermissions;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string, e: React.MouseEvent) => void;
   onSelectSC: (sc: SC) => void;
   onEditSC: (sc: SC) => void;
   onDeleteSC: (id: string) => void;
@@ -27,6 +29,7 @@ interface SCCardItemProps {
 }
 
 const areSCCardPropsEqual = (prev: SCCardItemProps, next: SCCardItemProps): boolean => {
+  if (prev.isSelected !== next.isSelected) return false;
   if (prev.sc !== next.sc) {
     if (
       prev.sc.id !== next.sc.id ||
@@ -57,6 +60,8 @@ const areSCCardPropsEqual = (prev: SCCardItemProps, next: SCCardItemProps): bool
 const SCCardItemComponent: React.FC<SCCardItemProps> = ({
   sc,
   permissions,
+  isSelected = false,
+  onToggleSelect,
   onSelectSC,
   onEditSC,
   onDeleteSC,
@@ -93,30 +98,41 @@ const SCCardItemComponent: React.FC<SCCardItemProps> = ({
 
     return (
       <div
-        className={`p-3 sm:p-4 rounded-xl border transition-all flex flex-col justify-between gap-2.5 sm:gap-3 relative ${
-          isCompletingAnim
-            ? 'animate-completion-pulse bg-emerald-100/60 dark:bg-emerald-950/40 border-emerald-400'
+        className={`p-3 sm:p-4 border rounded-2xl transition-all flex flex-col justify-between gap-2.5 sm:gap-3 relative ${
+          isSelected
+            ? 'bg-orange-50/80 dark:bg-orange-950/30 border-orange-500 ring-2 ring-orange-500/30 shadow-xs'
             : isAtrasada
-            ? 'bg-red-50/20 dark:bg-red-950/10 border-red-200 dark:border-red-900/50 hover:border-red-400'
+            ? 'bg-red-50/20 dark:bg-red-950/10 border-red-200 dark:border-red-900/50 hover:border-red-300'
             : isHoje
             ? 'bg-amber-50/25 dark:bg-amber-950/15 border-amber-300 dark:border-amber-800 hover:border-amber-400'
             : isBreve
-            ? 'bg-orange-50/20 dark:bg-orange-950/10 border-orange-200 dark:border-orange-900/50 hover:border-orange-400'
-            : 'bg-white dark:bg-[#202532] border-slate-200 dark:border-slate-700/80 hover:border-orange-400'
+            ? 'bg-orange-50/20 dark:bg-orange-950/10 border-orange-200 dark:border-orange-900/50 hover:border-orange-300'
+            : 'bg-white dark:bg-[#202532] border-slate-200 dark:border-slate-700/80 hover:border-slate-300'
         }`}
       >
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <button
-              type="button"
-              onClick={() => onSelectSC(sc)}
-              className="font-black text-sm sm:text-base text-orange-600 dark:text-orange-400 hover:underline cursor-pointer"
-            >
-              {sc.numero}
-            </button>
-            <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1">
-              <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
-              <span className="truncate max-w-[130px] sm:max-w-[150px]">{sc.solicitante}</span>
+          <div className="flex items-start gap-2.5 min-w-0">
+            {/* Selection Checkbox */}
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => onToggleSelect?.(sc.id, e as unknown as React.MouseEvent)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Selecionar SC ${sc.numero}`}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-orange-600 focus:ring-orange-500/30 cursor-pointer accent-orange-600 shrink-0"
+            />
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => onSelectSC(sc)}
+                className="font-black text-sm sm:text-base text-orange-600 dark:text-orange-400 hover:underline cursor-pointer text-left block"
+              >
+                {sc.numero}
+              </button>
+              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1">
+                <User className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+                <span className="truncate max-w-[130px] sm:max-w-[150px]">{sc.solicitante}</span>
+              </div>
             </div>
           </div>
 
@@ -127,12 +143,12 @@ const SCCardItemComponent: React.FC<SCCardItemProps> = ({
             disabled={!canEdit}
             title={
               !canEdit
-                ? 'Somente Comprador ou Administrador podem alterar status'
+                ? 'Sem permissão para alterar o status'
                 : sc.status === 'Concluído'
                 ? 'Concluída! Toque para reabrir'
                 : 'Toque para marcar como Concluída'
             }
-            className={`group/card-status relative inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-all duration-150 ${
+            className={`group/card-status relative inline-flex items-center gap-1 px-2.5 py-1 text-[11px] sm:text-xs font-semibold border transition-colors ${
               canEdit ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-85'
             } select-none min-h-[28px] sm:min-h-[32px] focus:outline-hidden ${
               isCompletingAnim

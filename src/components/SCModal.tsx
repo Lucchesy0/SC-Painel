@@ -13,6 +13,7 @@ import {
   Search,
   Edit2,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { SC, SCItem, SCStatus, SCTipo, UserProfile } from '../types';
 import { isUserOnline } from '../services/authService';
@@ -20,21 +21,25 @@ import { isUserOnline } from '../services/authService';
 interface SCModalProps {
   isOpen: boolean;
   editingSC: SC | null;
+  initialData?: Partial<SC> | null;
   users?: UserProfile[];
   currentUser?: UserProfile;
   onClose: () => void;
   onSave: (scData: Omit<SC, 'id'>, id?: string) => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onOpenAIPrintImport?: () => void;
 }
 
 export const SCModal: React.FC<SCModalProps> = ({
   isOpen,
   editingSC,
+  initialData,
   users = [],
   currentUser,
   onClose,
   onSave,
   onToast,
+  onOpenAIPrintImport,
 }) => {
   // Main SC fields
   const [numero, setNumero] = useState('');
@@ -159,6 +164,22 @@ export const SCModal: React.FC<SCModalProps> = ({
               }))
             : []
         );
+      } else if (initialData) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        setNumero(initialData.numero || '');
+        setData(initialData.data || todayStr);
+        setSolicitante(initialData.solicitante || currentUser?.nome || 'Operador MCM');
+        setTipo(initialData.tipo || 'Item');
+        setStatus(initialData.status || 'Em andamento');
+        setObservacoes(initialData.observacoes || '');
+        setItens(
+          initialData.itens
+            ? initialData.itens.map((it) => ({
+                ...it,
+                quantidadeSolicitada: it.quantidadeSolicitada ?? it.quantidade ?? 1,
+              }))
+            : []
+        );
       } else {
         // Try restoring draft from current session if exists
         let restoredFromDraft = false;
@@ -215,7 +236,7 @@ export const SCModal: React.FC<SCModalProps> = ({
       setIsProfileDropdownOpen(false);
       setProfileSearchQuery('');
     }
-  }, [isOpen, editingSC?.id]);
+  }, [isOpen, editingSC?.id, initialData]);
 
   // Auto-save draft in session storage while typing a new SC so background reloads never lose progress
   useEffect(() => {
@@ -586,15 +607,15 @@ export const SCModal: React.FC<SCModalProps> = ({
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <div
                                   className={`w-7 h-7 rounded-lg ${
-                                    prof.avatarColor || 'bg-slate-700'
+                                    prof?.avatarColor || 'bg-slate-700'
                                   } text-white flex items-center justify-center font-bold text-xs shrink-0 relative`}
                                 >
-                                  {prof.name.charAt(0).toUpperCase()}
+                                  {prof?.name ? prof.name.charAt(0).toUpperCase() : 'U'}
                                   <span
                                     className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${
-                                      prof.isOnline ? 'bg-emerald-500' : 'bg-rose-500'
+                                      prof?.isOnline ? 'bg-emerald-500' : 'bg-rose-500'
                                     }`}
-                                    title={prof.isOnline ? 'Perfil Online' : 'Perfil Offline'}
+                                    title={prof?.isOnline ? 'Perfil Online' : 'Perfil Offline'}
                                   />
                                 </div>
                                 <div className="flex flex-col min-w-0 leading-tight">
@@ -689,11 +710,24 @@ export const SCModal: React.FC<SCModalProps> = ({
                   {itens.length} {itens.length === 1 ? 'item' : 'itens'}
                 </span>
               </div>
-              {totalEstimado > 0 && (
-                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                  Total: R$ {totalEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {onOpenAIPrintImport && (
+                  <button
+                    type="button"
+                    onClick={onOpenAIPrintImport}
+                    title="Importar materiais de um print ou foto com IA"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Importar Print (IA)</span>
+                  </button>
+                )}
+                {totalEstimado > 0 && (
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                    Total: R$ {totalEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Barra de Inserção / Edição de Item */}
@@ -861,7 +895,7 @@ export const SCModal: React.FC<SCModalProps> = ({
 
                         return (
                           <tr
-                            key={item.id || idx}
+                            key={item.id ? `${item.id}-${idx}` : `item-row-${idx}`}
                             className={`transition ${
                               isEditingThis
                                 ? 'bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-400'
@@ -931,7 +965,7 @@ export const SCModal: React.FC<SCModalProps> = ({
 
                     return (
                       <div
-                        key={item.id || idx}
+                        key={item.id ? `${item.id}-${idx}` : `item-card-${idx}`}
                         className={`p-3 flex items-start justify-between gap-2.5 transition ${
                           isEditingThis
                             ? 'bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-400'
