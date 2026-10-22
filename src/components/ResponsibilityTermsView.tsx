@@ -144,14 +144,14 @@ const TermTableRow: React.FC<TermTableRowProps> = ({
   return (
     <>
       <tr
-        className={`transition group border-b border-slate-200 dark:border-slate-800/80 ${
+        className={`transition group border-b border-slate-200/90 dark:border-slate-800 ${
           isExpanded
             ? 'bg-orange-50/30 dark:bg-orange-950/20'
             : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40 bg-white dark:bg-[#1a1f2c]'
         }`}
       >
         {/* COLUNA 1: IDENTIFICADOR E STATUS */}
-        <td className="py-2.5 px-3.5 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">
+        <td className="py-2.5 px-3.5 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap border-r border-slate-100 dark:border-slate-800/60">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
               {isDev ? (
@@ -202,7 +202,7 @@ const TermTableRow: React.FC<TermTableRowProps> = ({
         </td>
 
         {/* COLUNA 2: RESPONSÁVEL & LOTAÇÃO */}
-        <td className="py-2.5 px-3.5">
+        <td className="py-2.5 px-3.5 border-r border-slate-100 dark:border-slate-800/60">
           <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs tracking-tight">
             {term.colaboradorNome}
           </div>
@@ -226,7 +226,7 @@ const TermTableRow: React.FC<TermTableRowProps> = ({
         </td>
 
         {/* COLUNA 3: EQUIPAMENTO & CONFIGURAÇÃO */}
-        <td className="py-2.5 px-3.5">
+        <td className="py-2.5 px-3.5 border-r border-slate-100 dark:border-slate-800/60">
           {isDev ? (
             <div className="space-y-0.5">
               <div className="font-semibold text-slate-900 dark:text-slate-100 uppercase text-xs flex items-center gap-1.5">
@@ -293,7 +293,7 @@ const TermTableRow: React.FC<TermTableRowProps> = ({
         </td>
 
         {/* COLUNA 4: EMISSÃO & PDF */}
-        <td className="py-2.5 px-3.5">
+        <td className="py-2.5 px-3.5 border-r border-slate-100 dark:border-slate-800/60">
           <div className="space-y-0.5">
             <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1">
               <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
@@ -371,7 +371,7 @@ const TermTableRow: React.FC<TermTableRowProps> = ({
       {/* GAVETA INLINE DE DETALHES COMPLETOS (ACCORDION) */}
       <AnimatePresence>
         {isExpanded && (
-          <tr className="bg-orange-50/20 dark:bg-[#141824] border-b-2 border-orange-200/80 dark:border-orange-950/80">
+          <tr className="bg-orange-50/20 dark:bg-[#141824] border-b border-slate-200 dark:border-slate-800">
             <td colSpan={5} className="p-4 sm:p-5">
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
@@ -1936,9 +1936,9 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
               <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
                 <thead className="bg-slate-50 dark:bg-[#141822] text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <th className="py-3 px-4 font-bold w-[170px]">AF / Nº Termo</th>
-                    <th className="py-3 px-4 font-bold min-w-[260px] max-w-[340px]">Responsável & Lotação</th>
-                    <th className="py-3 px-4 font-bold min-w-[320px]">
+                    <th className="py-3 px-3.5 font-bold w-[170px] border-r border-slate-200/80 dark:border-slate-800">AF / Nº Termo</th>
+                    <th className="py-3 px-3.5 font-bold min-w-[260px] max-w-[340px] border-r border-slate-200/80 dark:border-slate-800">Responsável & Lotação</th>
+                    <th className="py-3 px-3.5 font-bold min-w-[320px] border-r border-slate-200/80 dark:border-slate-800">
                       {activeCategory === 'devolucao'
                         ? 'Equipamento Devolvido & Estado'
                         : activeCategory === 'celular'
@@ -1947,23 +1947,23 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                         ? 'Tablet & Acessórios'
                         : 'Notebook & Configuração'}
                     </th>
-                    <th className="py-3 px-4 font-bold min-w-[240px] bg-orange-50/40 dark:bg-orange-950/10">
+                    <th className="py-3 px-3.5 font-bold min-w-[240px] bg-orange-50/40 dark:bg-orange-950/10 border-r border-slate-200/80 dark:border-slate-800">
                       <div className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
                         <FileCheck className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0" />
                         <span>Emissão & PDF Oficial</span>
                       </div>
                     </th>
-                    <th className="py-3 px-4 font-bold text-right w-[190px]">Ações</th>
+                    <th className="py-3 px-3.5 font-bold text-right w-[190px]">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                <tbody className="divide-y divide-slate-200/90 dark:divide-slate-800">
                   {groupByCentroCusto ? (
                     // MODO DIVIDIDO POR CENTRO DE CUSTO
                     (Object.entries(groupedTermsByCC) as [string, ResponsibilityTerm[]][]).map(([ccName, ccTerms]) => (
                       <React.Fragment key={`cc-group-${ccName}`}>
                         {/* Cabeçalho de Divisão por Centro de Custo */}
-                        <tr className="bg-slate-100/90 dark:bg-[#151a24] border-y border-slate-200 dark:border-slate-700/80">
-                          <td colSpan={5} className="py-2.5 px-4">
+                        <tr className="bg-slate-100/90 dark:bg-[#151a24] border-t border-b border-slate-200 dark:border-slate-700/80">
+                          <td colSpan={5} className="py-2.5 px-4 border-b border-slate-200 dark:border-slate-700/80">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 rounded-md bg-orange-600 text-white flex items-center justify-center text-[10px] shadow-xs">
@@ -2038,7 +2038,7 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                 >
                   <div className="p-5 space-y-3.5">
                     {/* Top Row: AF / Linha + Código */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800/80">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-orange-100 dark:bg-orange-950/40 text-orange-600 flex items-center justify-center">
                           {isDev ? (
@@ -2076,7 +2076,7 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                     </div>
 
                     {/* Colaborador in Red Bold (template pattern) */}
-                    <div>
+                    <div className="py-2 border-b border-slate-100 dark:border-slate-800/80">
                       <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">
                         {isDev ? 'Colaborador (Devolvente):' : 'Responsável:'}
                       </span>
@@ -2086,6 +2086,7 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                     </div>
 
                     {/* Specs Pill Summary */}
+                    <div className="pb-2 border-b border-slate-100 dark:border-slate-800/80">
                     {isDev ? (
                       <div className="p-3 bg-slate-50 dark:bg-[#141822] rounded-xl border border-slate-200/80 dark:border-slate-800/80 space-y-2 text-xs">
                         <div className="flex items-center justify-between">
@@ -2203,9 +2204,10 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                         </div>
                       </div>
                     )}
+                    </div>
 
                     {/* Centro de Custo e Data */}
-                    <div className="space-y-1 text-xs">
+                    <div className="py-2 border-b border-slate-100 dark:border-slate-800/80 space-y-1 text-xs">
                       <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                         <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate font-semibold" title={term.centroCusto ? `Centro de Custo: ${getCanonicalCC(term.centroCusto)}` : 'Centro de Custo não informado'}>
@@ -2220,7 +2222,7 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
 
                     {/* Checklists Summary Badges (Notebook) */}
                     {!isCell && !isTab && !isDev && (
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2 pt-1 pb-2 border-b border-slate-100 dark:border-slate-800/80">
                         <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold border border-emerald-200 dark:border-emerald-800">
                           ✓ {checklistCount}/9 Verificações
                         </span>
@@ -2233,7 +2235,7 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                     )}
 
                     {/* METADADO DE RASTREABILIDADE DE PDF NO CARD */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    <div className="pt-2">
                       <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">
                         <span className="flex items-center gap-1">
                           <FileCheck className="w-3 h-3 text-orange-500" />
@@ -2269,7 +2271,7 @@ export const ResponsibilityTermsView: React.FC<ResponsibilityTermsViewProps> = (
                   </div>
 
                   {/* Card Actions */}
-                  <div className="p-3 bg-slate-50/80 dark:bg-[#161b26] flex items-center justify-between gap-2">
+                  <div className="p-3 bg-slate-50/80 dark:bg-[#161b26] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
                     <button
                       onClick={() => handlePrintTerm(term)}
                       className="flex-1 py-1.5 px-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs active:scale-98"
